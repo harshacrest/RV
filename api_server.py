@@ -22,7 +22,7 @@ STRATEGY_FILES = {
     "orion": BASE / "strategy_returns_orion_index_kd_60_40_sl10_max90_min20.xlsx",
 }
 
-FEATURES = ["RV_today", "RV_ratio"]
+FEATURES = ["RV_today", "RV_3d_avg", "RV_ratio", "RV_7d_avg", "RV_7d_ratio", "RV_pctrank_30d", "IV_7d", "IV_change_1d", "VRP_today"]
 
 
 def _clean(v):
@@ -48,10 +48,19 @@ def _load():
 RV_DATA, STRAT_DATA = _load()
 
 
-def _merge(strategy: str) -> pd.DataFrame:
+def _filter_dates(df: pd.DataFrame, date_col: str, start: str | None, end: str | None) -> pd.DataFrame:
+    if start:
+        df = df[df[date_col] >= pd.Timestamp(start).date()]
+    if end:
+        df = df[df[date_col] <= pd.Timestamp(end).date()]
+    return df
+
+
+def _merge(strategy: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
     rv = RV_DATA.copy()
     st = STRAT_DATA[strategy].copy()
     merged = rv.merge(st, left_on="date", right_on="Date", how="inner")
+    merged = _filter_dates(merged, "date", start, end)
     return merged
 
 
@@ -153,6 +162,10 @@ FEATURE_BUCKETS = {
     "RV_today": [0, 13, 23, float("inf")],
     "RV_3d_avg": [0, 13, 23, float("inf")],
     "RV_ratio": [0, 0.7, 1.3, float("inf")],
+    "RV_7d_avg": [0, 13, 23, float("inf")],
+    "RV_7d_ratio": [0, 0.7, 1.3, float("inf")],
+    "RV_pctrank_30d": [0, 20, 40, 60, 80, 100.01],
+    "IV_7d": [0, 12.16, 17.06, float("inf")],
 }
 
 
@@ -181,7 +194,7 @@ def _compute_buckets(df: pd.DataFrame, feature: str) -> list[dict]:
             label = f"{lo:{fmt}} – {hi:{fmt}}"
         bucket_labels[mask] = i
         sub = valid[mask]
-        buckets.append(_bucket_metrics(sub, label, [float(lo), float(hi)], feature))
+        buckets.append(_bucket_metrics(sub, label, [_clean(float(lo)), _clean(float(hi))], feature))
 
     streaks = _compute_streaks(bucket_labels)
     _inject_streaks(buckets, streaks)
@@ -290,13 +303,20 @@ def get_strategies():
 def get_features():
     return [
         {"key": "RV_today", "label": "RV Today (Yang-Zhang)"},
-        {"key": "RV_ratio", "label": "RV Ratio"},
+        {"key": "RV_3d_avg", "label": "RV 3d Avg"},
+        {"key": "RV_ratio", "label": "RV Ratio (1d/3d)"},
+        {"key": "RV_7d_avg", "label": "RV 7d Avg"},
+        {"key": "RV_7d_ratio", "label": "RV Ratio (1d/7d)"},
+        {"key": "RV_pctrank_30d", "label": "RV Pctile Rank (30d)"},
+        {"key": "IV_7d", "label": "IV 7d Forward"},
+        {"key": "IV_change_1d", "label": "IV Change 1d"},
+        {"key": "VRP_today", "label": "VRP (IV−RV)"},
     ]
 
 
 @app.get("/api/plain-returns/{strategy}")
-def get_plain_returns(strategy: str):
-    merged = _merge(strategy)
+def get_plain_returns(strategy: str, start_date: str | None = None, end_date: str | None = None):
+    merged = _merge(strategy, start_date, end_date)
     merged = merged.sort_values("date")
     s = _summary(merged)
     pnl = merged["Net_Daily_PnL_PerCent"].values
@@ -352,8 +372,8 @@ def get_plain_returns(strategy: str):
 
 
 @app.get("/api/feature-buckets/{strategy}/{feature}")
-def get_feature_buckets(strategy: str, feature: str):
-    merged = _merge(strategy)
+def get_feature_buckets(strategy: str, feature: str, start_date: str | None = None, end_date: str | None = None):
+    merged = _merge(strategy, start_date, end_date)
     raw = _compute_buckets(merged, feature)
     pct = _compute_percentile_buckets(merged, feature)
     return {
@@ -369,8 +389,10 @@ def get_composite(
     strategy: str,
     row_feature: str = Query(...),
     col_feature: str = Query(...),
+    start_date: str | None = None,
+    end_date: str | None = None,
 ):
-    merged = _merge(strategy)
+    merged = _merge(strategy, start_date, end_date)
     cross = _compute_cross(merged, row_feature, col_feature)
     return {
         "strategy": strategy,
@@ -381,8 +403,9 @@ def get_composite(
 
 
 @app.get("/api/rv-timeseries")
-def get_rv_timeseries():
+def get_rv_timeseries(start_date: str | None = None, end_date: str | None = None):
     rv = RV_DATA.copy()
+    rv = _filter_dates(rv, "date", start_date, end_date)
     rv = rv.dropna(subset=["RV_today"])
     records = []
     for _, r in rv.iterrows():
@@ -395,6 +418,12 @@ def get_rv_timeseries():
             "RV_today": _clean(round(float(r["RV_today"]), 6)),
             "RV_3d_avg": _clean(round(float(r["RV_3d_avg"]), 6)) if pd.notna(r["RV_3d_avg"]) else None,
             "RV_ratio": _clean(round(float(r["RV_ratio"]), 6)) if pd.notna(r["RV_ratio"]) else None,
+            "RV_7d_avg": _clean(round(float(r["RV_7d_avg"]), 6)) if pd.notna(r.get("RV_7d_avg")) else None,
+            "RV_7d_ratio": _clean(round(float(r["RV_7d_ratio"]), 6)) if pd.notna(r.get("RV_7d_ratio")) else None,
+            "RV_pctrank_30d": _clean(round(float(r["RV_pctrank_30d"]), 2)) if pd.notna(r.get("RV_pctrank_30d")) else None,
+            "IV_7d": _clean(round(float(r["IV_7d"]), 2)) if pd.notna(r.get("IV_7d")) else None,
+            "IV_change_1d": _clean(round(float(r["IV_change_1d"]), 2)) if pd.notna(r.get("IV_change_1d")) else None,
+            "VRP_today": _clean(round(float(r["VRP_today"]), 2)) if pd.notna(r.get("VRP_today")) else None,
         })
     return records
 
