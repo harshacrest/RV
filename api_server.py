@@ -427,11 +427,13 @@ def get_composite(
 ):
     merged = _merge(strategy, start_date, end_date)
     cross = _compute_cross(merged, row_feature, col_feature)
+    dte_cross = _compute_dte_cross(merged, row_feature)
     return {
         "strategy": strategy,
         "row_feature": row_feature,
         "col_feature": col_feature,
         **cross,
+        "dte_cross": dte_cross,
     }
 
 

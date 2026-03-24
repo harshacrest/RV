@@ -20,7 +20,8 @@
       "Bash(do echo:*)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f\"\"  {b[''''label'''']:25s} days={b[''''trading_days'''']}\"\"\\) for b in d[''''raw_buckets'''']]\" done)",
       "Bash(kill 9139)",
-      "Bash(kill 9800)"
+      "Bash(kill 9800)",
+      "Bash(npx next:*)"
     ]
   }
 }
