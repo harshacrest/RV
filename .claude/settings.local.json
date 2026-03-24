@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof -ti:5500)",
+      "Bash(xargs kill:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(find /Users/harsha/Desktop/Research/DATA/NSE/NIFTY -type f -name *.parquet -o -type f -name *.csv)",
+      "Bash(python3:*)",
+      "Bash(find /Users/harsha/Desktop/Research/IV:HV/DATA/NIFTY -type f -name *.parquet)",
+      "Bash(/opt/homebrew/bin/python3 fetch_data.py)",
+      "Bash(/opt/homebrew/bin/python3 rv_features.py)"
+    ]
+  }
+}
