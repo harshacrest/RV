@@ -2,9 +2,14 @@
 Compute daily Realized Volatility features from Nifty spot OHLC data.
 
 Features:
-  1. RV_today    – Yang-Zhang single-day RV estimator
-  2. RV_3d_avg   – Mean of RV_today over the previous 3 trading days (excluding today)
-  3. RV_ratio    – RV_today / RV_3d_avg
+  1. RV_today  – Yang-Zhang single-day estimator, annualized (* sqrt(252))
+     RV_today = SQRT( LN(O/C_prev)^2 + LN(H/O)*(LN(H/O)-LN(C/O)) + LN(L/O)*(LN(L/O)-LN(C/O)) ) * SQRT(252)
+
+  2. RV_3d_avg – Simple mean of previous 3 trading days' annualized RV (excluding today)
+     RV_3d_avg = MEAN(RV_today[t-1], RV_today[t-2], RV_today[t-3])
+
+  3. RV_ratio
+     RV_ratio = RV_today / RV_3d_avg
 """
 
 import numpy as np
@@ -22,42 +27,17 @@ def load_spot_ohlc(path: Path) -> pd.DataFrame:
 
 
 def compute_rv_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Yang-Zhang single-day RV estimator (per-bar):
-        RV_today = sqrt(
-            ln(O/C_prev)^2
-          + ln(H/O) * (ln(H/O) - ln(C/O))
-          + ln(L/O) * (ln(L/O) - ln(C/O))
-        )
 
-    RV_3d_avg = mean of RV_today over [t-1, t-2, t-3]  (previous 3 trading days, excluding today)
-    RV_ratio  = RV_today / RV_3d_avg
-    """
-    o = df["open"].values
-    h = df["high"].values
-    l = df["low"].values
-    c = df["close"].values
+    ro = np.log(df['open'] / df['close'].shift(1))
+    rc = np.log(df['close'] / df['open'])
+    rh = np.log(df['high'] / df['open'])
+    rl = np.log(df['low'] / df['open'])
 
-    prev_c = np.empty_like(c)
-    prev_c[0] = np.nan
-    prev_c[1:] = c[:-1]
+    RS = rh * (rh - rc) + rl * (rl - rc)
+    RS = np.maximum(RS,0)  # Ensure non-negative to avoid sqrt of negative numbers
+    df['RV_today'] = np.sqrt(ro**2 + RS)     * np.sqrt(252) * 100  # Annualize by multiplying with sqrt(252)
 
-    ln_o_pc = np.log(o / prev_c)            # ln(Open / Prev_Close)
-    ln_h_o = np.log(h / o)                  # ln(High / Open)
-    ln_l_o = np.log(l / o)                  # ln(Low  / Open)
-    ln_c_o = np.log(c / o)                  # ln(Close / Open)
-
-    rv_sq = (
-        ln_o_pc ** 2
-        + ln_h_o * (ln_h_o - ln_c_o)
-        + ln_l_o * (ln_l_o - ln_c_o)
-    )
-    # Clamp to zero before sqrt to handle floating-point noise
-    rv_today = np.sqrt(np.maximum(rv_sq, 0.0))
-
-    df["RV_today"] = rv_today
-
-    # RV_3d_avg: rolling mean of previous 3 days (shift by 1 to exclude today)
+    # RV_3d_avg: mean of previous 3 trading days (excluding today)
     df["RV_3d_avg"] = df["RV_today"].shift(1).rolling(window=3, min_periods=3).mean()
 
     # RV_ratio
@@ -70,7 +50,6 @@ def main():
     df = load_spot_ohlc(SPOT_PATH)
     df = compute_rv_features(df)
 
-    # Keep only the required columns
     df = df[["timestamp", "open", "high", "low", "close", "RV_today", "RV_3d_avg", "RV_ratio"]]
 
     df.to_parquet(OUTPUT_PATH, index=False)

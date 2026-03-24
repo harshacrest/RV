@@ -22,7 +22,7 @@ STRATEGY_FILES = {
     "orion": BASE / "strategy_returns_orion_index_kd_60_40_sl10_max90_min20.xlsx",
 }
 
-FEATURES = ["RV_today", "RV_3d_avg", "RV_ratio"]
+FEATURES = ["RV_today", "RV_ratio"]
 
 
 def _clean(v):
@@ -83,7 +83,7 @@ def _summary(df: pd.DataFrame) -> dict:
     }
 
 
-def _bucket_metrics(sub: pd.DataFrame, label: str, rng: list) -> dict:
+def _bucket_metrics(sub: pd.DataFrame, label: str, rng: list, feature: str = None) -> dict:
     pnl = sub["Net_Daily_PnL_PerCent"]
     days = len(sub)
     if days == 0:
@@ -92,6 +92,8 @@ def _bucket_metrics(sub: pd.DataFrame, label: str, rng: list) -> dict:
             "total_pct": 0, "avg_daily_pct": 0, "win_rate": 0,
             "sharpe": None, "sharpe_pct": None,
             "max_win_pct": 0, "max_loss_pct": 0, "max_drawdown_pct": 0,
+            "feat_mean": None, "feat_max": None, "feat_min": None,
+            "streak_mean": None, "streak_median": None, "streak_min": None, "streak_max": None,
         }
     pos = (pnl > 0).sum()
     neg = (pnl < 0).sum()
@@ -112,45 +114,99 @@ def _bucket_metrics(sub: pd.DataFrame, label: str, rng: list) -> dict:
         "max_win_pct": round(float(pnl.max()), 4) if days > 0 else 0,
         "max_loss_pct": round(float(pnl.min()), 4) if days > 0 else 0,
         "max_drawdown_pct": round(float(dd.min()), 4) if days > 0 else 0,
+        "feat_mean": round(float(sub[feature].mean()), 6) if feature and feature in sub.columns and days > 0 else None,
+        "feat_max": round(float(sub[feature].max()), 6) if feature and feature in sub.columns and days > 0 else None,
+        "feat_min": round(float(sub[feature].min()), 6) if feature and feature in sub.columns and days > 0 else None,
+        "streak_mean": None, "streak_median": None, "streak_min": None, "streak_max": None,
     }
 
 
-def _compute_buckets(df: pd.DataFrame, feature: str, n_buckets: int = 5) -> list[dict]:
-    valid = df.dropna(subset=[feature])
+def _compute_streaks(bucket_labels: np.ndarray) -> dict[int, list[int]]:
+    """Given an array of bucket indices (one per day, time-ordered), compute consecutive streaks per bucket."""
+    streaks: dict[int, list[int]] = {}
+    if len(bucket_labels) == 0:
+        return streaks
+    cur_label = bucket_labels[0]
+    cur_len = 1
+    for j in range(1, len(bucket_labels)):
+        if bucket_labels[j] == cur_label:
+            cur_len += 1
+        else:
+            streaks.setdefault(cur_label, []).append(cur_len)
+            cur_label = bucket_labels[j]
+            cur_len = 1
+    streaks.setdefault(cur_label, []).append(cur_len)
+    return streaks
+
+
+def _inject_streaks(buckets: list[dict], streaks: dict[int, list[int]]):
+    for i, b in enumerate(buckets):
+        s = streaks.get(i, [])
+        if s:
+            b["streak_mean"] = round(float(np.mean(s)), 1)
+            b["streak_median"] = round(float(np.median(s)), 1)
+            b["streak_min"] = int(np.min(s))
+            b["streak_max"] = int(np.max(s))
+
+
+FEATURE_BUCKETS = {
+    "RV_today": [0, 13, 23, float("inf")],
+    "RV_3d_avg": [0, 13, 23, float("inf")],
+    "RV_ratio": [0, 0.7, 1.3, float("inf")],
+}
+
+
+def _compute_buckets(df: pd.DataFrame, feature: str) -> list[dict]:
+    valid = df.dropna(subset=[feature]).sort_values("date")
     if len(valid) == 0:
         return []
-    quantiles = np.linspace(0, 1, n_buckets + 1)
-    edges = np.quantile(valid[feature].values, quantiles)
-    edges = np.unique(edges)
-    if len(edges) < 2:
-        return [_bucket_metrics(valid, f"{feature}: all", [float(valid[feature].min()), float(valid[feature].max())])]
+
+    edges = FEATURE_BUCKETS.get(feature)
+    if not edges:
+        # Default: 5 quantile (equal-count) buckets
+        quantiles = np.linspace(0, 1, 6)
+        edges = np.unique(np.quantile(valid[feature].values, quantiles)).tolist()
 
     buckets = []
+    bucket_labels = np.full(len(valid), -1, dtype=int)
+    vals = valid[feature].values
     for i in range(len(edges) - 1):
         lo, hi = edges[i], edges[i + 1]
-        if i == len(edges) - 2:
-            mask = (valid[feature] >= lo) & (valid[feature] <= hi)
+        fmt = ".2f" if any(e != int(e) for e in edges if e != float("inf")) else ".0f"
+        if hi == float("inf"):
+            mask = vals >= lo
+            label = f"≥ {lo:{fmt}}"
         else:
-            mask = (valid[feature] >= lo) & (valid[feature] < hi)
+            mask = (vals >= lo) & (vals < hi)
+            label = f"{lo:{fmt}} – {hi:{fmt}}"
+        bucket_labels[mask] = i
         sub = valid[mask]
-        label = f"{lo:.4f} – {hi:.4f}"
-        buckets.append(_bucket_metrics(sub, label, [float(lo), float(hi)]))
+        buckets.append(_bucket_metrics(sub, label, [float(lo), float(hi)], feature))
+
+    streaks = _compute_streaks(bucket_labels)
+    _inject_streaks(buckets, streaks)
     return buckets
 
 
 def _compute_percentile_buckets(df: pd.DataFrame, feature: str) -> list[dict]:
-    valid = df.dropna(subset=[feature])
+    valid = df.dropna(subset=[feature]).sort_values("date")
     if len(valid) == 0:
         return []
     valid = valid.copy()
     valid["_pct"] = valid[feature].rank(pct=True)
     labels = ["P0–P20", "P20–P40", "P40–P60", "P60–P80", "P80–P100"]
-    edges = [0, 0.2, 0.4, 0.6, 0.8, 1.01]
+    p_edges = [0, 0.2, 0.4, 0.6, 0.8, 1.01]
     buckets = []
+    bucket_labels = np.full(len(valid), -1, dtype=int)
+    pct_vals = valid["_pct"].values
     for i in range(5):
-        mask = (valid["_pct"] >= edges[i]) & (valid["_pct"] < edges[i + 1])
+        mask = (pct_vals >= p_edges[i]) & (pct_vals < p_edges[i + 1])
+        bucket_labels[mask] = i
         sub = valid[mask]
-        buckets.append(_bucket_metrics(sub, labels[i], [edges[i], edges[i + 1]]))
+        buckets.append(_bucket_metrics(sub, labels[i], [p_edges[i], p_edges[i + 1]], feature))
+
+    streaks = _compute_streaks(bucket_labels)
+    _inject_streaks(buckets, streaks)
     return buckets
 
 
@@ -234,7 +290,6 @@ def get_strategies():
 def get_features():
     return [
         {"key": "RV_today", "label": "RV Today (Yang-Zhang)"},
-        {"key": "RV_3d_avg", "label": "RV 3d Avg"},
         {"key": "RV_ratio", "label": "RV Ratio"},
     ]
 

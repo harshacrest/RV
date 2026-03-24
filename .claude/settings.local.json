@@ -8,7 +8,12 @@
       "Bash(python3:*)",
       "Bash(find /Users/harsha/Desktop/Research/IV:HV/DATA/NIFTY -type f -name *.parquet)",
       "Bash(/opt/homebrew/bin/python3 fetch_data.py)",
-      "Bash(/opt/homebrew/bin/python3 rv_features.py)"
+      "Bash(/opt/homebrew/bin/python3 rv_features.py)",
+      "Bash(/opt/homebrew/bin/python3 -c \":*)",
+      "Bash(kill 95519)",
+      "Bash(uv run:*)",
+      "Bash(curl -s http://localhost:5501/api/feature-buckets/dm/RV_today)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); b=d[''''raw_buckets''''][0]; print\\(json.dumps\\({k:b[k] for k in [''''label'''',''''trading_days'''',''''streak_mean'''',''''streak_median'''',''''streak_min'''',''''streak_max'''']}, indent=2\\)\\)\")"
     ]
   }
 }
