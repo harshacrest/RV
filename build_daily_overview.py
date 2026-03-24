@@ -146,12 +146,12 @@ for r in range(3, len(merged) + 3):
     # IV_7d, IV_change_1d, VRP_today
     for c in [11, 12, 13]:
         ws.cell(row=r, column=c).number_format = '0.00'
-    # Strategy return %
+    # Strategy return % (values already in %, e.g. 0.58 = 0.58%)
     for c in [14, 18, 22]:
-        ws.cell(row=r, column=c).number_format = '0.00%'
-    # Strategy equity curve
+        ws.cell(row=r, column=c).number_format = '0.00'
+    # Strategy equity curve (values already in %, e.g. 0.58 = 0.58%)
     for c in [15, 19, 23]:
-        ws.cell(row=r, column=c).number_format = '0.00%'
+        ws.cell(row=r, column=c).number_format = '0.00'
     # Strategy net PnL
     for c in [16, 20, 24]:
         ws.cell(row=r, column=c).number_format = '#,##0.00'

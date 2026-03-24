@@ -22,13 +22,18 @@ STRATEGY_FILES = {
     "orion": BASE / "strategy_returns_orion_index_kd_60_40_sl10_max90_min20.xlsx",
 }
 
-FEATURES = ["RV_today", "RV_3d_avg", "RV_ratio", "RV_7d_avg", "RV_7d_ratio", "RV_pctrank_30d", "IV_7d", "IV_change_1d", "VRP_today"]
+FEATURES = ["RV_today", "IV_7d", "IV_change_1d", "VRP_today"]
+
+RISK_FREE_PCT = 5.5  # annual risk-free rate in % (same units as Net_Daily_PnL_PerCent)
 
 
 def _clean(v):
     if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
         return None
     return v
+
+
+TRADING_DATES_PATH = BASE.parent / "DATA" / "NSE" / "trading_dates.csv"
 
 
 def _load():
@@ -42,10 +47,17 @@ def _load():
         df["Date"] = pd.to_datetime(df["Date"]).dt.date
         strats[key] = df
 
-    return rv, strats
+    # Load DTE from trading_dates.csv
+    dte_df = pd.read_csv(TRADING_DATES_PATH, usecols=["t_date", "DTE"])
+    dte_df["t_date"] = pd.to_datetime(dte_df["t_date"]).dt.date
+    dte_df["DTE"] = pd.to_numeric(dte_df["DTE"], errors="coerce")
+    dte_df = dte_df.dropna(subset=["DTE"])
+    dte_df["DTE"] = dte_df["DTE"].astype(int)
+
+    return rv, strats, dte_df
 
 
-RV_DATA, STRAT_DATA = _load()
+RV_DATA, STRAT_DATA, DTE_DATA = _load()
 
 
 def _filter_dates(df: pd.DataFrame, date_col: str, start: str | None, end: str | None) -> pd.DataFrame:
@@ -60,6 +72,7 @@ def _merge(strategy: str, start: str | None = None, end: str | None = None) -> p
     rv = RV_DATA.copy()
     st = STRAT_DATA[strategy].copy()
     merged = rv.merge(st, left_on="date", right_on="Date", how="inner")
+    merged = merged.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
     merged = _filter_dates(merged, "date", start, end)
     return merged
 
@@ -71,7 +84,7 @@ def _summary(df: pd.DataFrame) -> dict:
     neg = (pnl < 0).sum()
     std = pnl.std()
     mean = pnl.mean()
-    sharpe = (mean / std * math.sqrt(252)) if std > 0 else None
+    sharpe = ((mean * 252 - RISK_FREE_PCT) / (std * math.sqrt(252))) if std > 0 else None
     cum = pnl.cumsum()
     running_max = cum.cummax()
     dd = cum - running_max
@@ -98,8 +111,8 @@ def _bucket_metrics(sub: pd.DataFrame, label: str, rng: list, feature: str = Non
     if days == 0:
         return {
             "label": label, "range": rng, "trading_days": 0,
-            "total_pct": 0, "avg_daily_pct": 0, "win_rate": 0,
-            "sharpe": None, "sharpe_pct": None,
+            "total_pct": 0, "avg_daily_pct": 0, "win_rate": 0, "loss_rate": 0,
+            "sharpe": None, "sharpe_pct": None, "ann_vol_pct": None,
             "max_win_pct": 0, "max_loss_pct": 0, "max_drawdown_pct": 0,
             "feat_mean": None, "feat_max": None, "feat_min": None,
             "streak_mean": None, "streak_median": None, "streak_min": None, "streak_max": None,
@@ -108,7 +121,9 @@ def _bucket_metrics(sub: pd.DataFrame, label: str, rng: list, feature: str = Non
     neg = (pnl < 0).sum()
     std = pnl.std()
     mean = pnl.mean()
-    sharpe = (mean / std * math.sqrt(252)) if std > 0 else None
+    sharpe = ((mean * 252 - RISK_FREE_PCT) / (std * math.sqrt(252))) if std > 0 else None
+    ann_vol = float(std * math.sqrt(252)) if std > 0 else None
+    win_rate = float(pos / max(pos + neg, 1))
     cum = pnl.cumsum()
     dd = cum - cum.cummax()
     return {
@@ -117,9 +132,11 @@ def _bucket_metrics(sub: pd.DataFrame, label: str, rng: list, feature: str = Non
         "trading_days": int(days),
         "total_pct": round(float(pnl.sum()), 4),
         "avg_daily_pct": round(float(mean), 4),
-        "win_rate": round(float(pos / max(pos + neg, 1)), 4),
+        "win_rate": round(win_rate, 4),
+        "loss_rate": round(1 - win_rate, 4),
         "sharpe": round(float(sharpe), 2) if sharpe else None,
         "sharpe_pct": round(float(sharpe), 2) if sharpe else None,
+        "ann_vol_pct": round(ann_vol, 4) if ann_vol else None,
         "max_win_pct": round(float(pnl.max()), 4) if days > 0 else 0,
         "max_loss_pct": round(float(pnl.min()), 4) if days > 0 else 0,
         "max_drawdown_pct": round(float(dd.min()), 4) if days > 0 else 0,
@@ -158,40 +175,24 @@ def _inject_streaks(buckets: list[dict], streaks: dict[int, list[int]]):
             b["streak_max"] = int(np.max(s))
 
 
-FEATURE_BUCKETS = {
-    "RV_today": [0, 13, 23, float("inf")],
-    "RV_3d_avg": [0, 13, 23, float("inf")],
-    "RV_ratio": [0, 0.7, 1.3, float("inf")],
-    "RV_7d_avg": [0, 13, 23, float("inf")],
-    "RV_7d_ratio": [0, 0.7, 1.3, float("inf")],
-    "RV_pctrank_30d": [0, 20, 40, 60, 80, 100.01],
-    "IV_7d": [0, 12.16, 17.06, float("inf")],
-}
-
-
 def _compute_buckets(df: pd.DataFrame, feature: str) -> list[dict]:
     valid = df.dropna(subset=[feature]).sort_values("date")
     if len(valid) == 0:
         return []
 
-    edges = FEATURE_BUCKETS.get(feature)
-    if not edges:
-        # Default: 5 quantile (equal-count) buckets
-        quantiles = np.linspace(0, 1, 6)
-        edges = np.unique(np.quantile(valid[feature].values, quantiles)).tolist()
+    # 3 equal-count (tercile) buckets
+    edges = np.unique(np.quantile(valid[feature].values, [0, 1/3, 2/3, 1.0])).tolist()
 
     buckets = []
     bucket_labels = np.full(len(valid), -1, dtype=int)
     vals = valid[feature].values
     for i in range(len(edges) - 1):
         lo, hi = edges[i], edges[i + 1]
-        fmt = ".2f" if any(e != int(e) for e in edges if e != float("inf")) else ".0f"
-        if hi == float("inf"):
-            mask = vals >= lo
-            label = f"≥ {lo:{fmt}}"
+        if i == len(edges) - 2:
+            mask = (vals >= lo) & (vals <= hi)
         else:
             mask = (vals >= lo) & (vals < hi)
-            label = f"{lo:{fmt}} – {hi:{fmt}}"
+        label = f"{lo:.2f} – {hi:.2f}"
         bucket_labels[mask] = i
         sub = valid[mask]
         buckets.append(_bucket_metrics(sub, label, [_clean(float(lo)), _clean(float(hi))], feature))
@@ -207,12 +208,12 @@ def _compute_percentile_buckets(df: pd.DataFrame, feature: str) -> list[dict]:
         return []
     valid = valid.copy()
     valid["_pct"] = valid[feature].rank(pct=True)
-    labels = ["P0–P20", "P20–P40", "P40–P60", "P60–P80", "P80–P100"]
-    p_edges = [0, 0.2, 0.4, 0.6, 0.8, 1.01]
+    labels = ["P0–P33", "P33–P67", "P67–P100"]
+    p_edges = [0, 1/3, 2/3, 1.01]
     buckets = []
     bucket_labels = np.full(len(valid), -1, dtype=int)
     pct_vals = valid["_pct"].values
-    for i in range(5):
+    for i in range(3):
         mask = (pct_vals >= p_edges[i]) & (pct_vals < p_edges[i + 1])
         bucket_labels[mask] = i
         sub = valid[mask]
@@ -223,25 +224,60 @@ def _compute_percentile_buckets(df: pd.DataFrame, feature: str) -> list[dict]:
     return buckets
 
 
-def _compute_cross(df: pd.DataFrame, row_feature: str, col_feature: str, n_buckets: int = 5) -> dict:
+def _compute_dte_cross(df: pd.DataFrame, feature: str) -> dict:
+    """Cross-tab: feature buckets (rows) x DTE values (columns)."""
+    valid = df.dropna(subset=[feature, "DTE"]).sort_values("date")
+    if len(valid) == 0:
+        return {"dte_labels": [], "feature_labels": [], "grid": []}
+
+    dte_values = sorted(valid["DTE"].dropna().unique().astype(int).tolist())
+    dte_labels = [str(d) for d in dte_values]
+
+    edges = np.unique(np.quantile(valid[feature].values, [0, 1/3, 2/3, 1.0])).tolist()
+
+    vals = valid[feature].values
+    feature_labels = []
+    grid = []
+    for i in range(len(edges) - 1):
+        lo, hi = edges[i], edges[i + 1]
+        fmt = ".2f" if any(e != int(e) for e in edges if e != float("inf")) else ".0f"
+        if hi == float("inf"):
+            fmask = vals >= lo
+            label = f"≥ {lo:{fmt}}"
+        else:
+            fmask = (vals >= lo) & (vals < hi)
+            label = f"{lo:{fmt}} – {hi:{fmt}}"
+        feature_labels.append(label)
+
+        row = []
+        for dte_val in dte_values:
+            dmask = valid["DTE"].values == dte_val
+            sub = valid[fmask & dmask]
+            row.append(_bucket_metrics(sub, f"{label} DTE={dte_val}", [_clean(float(lo)), _clean(float(hi))], feature))
+        grid.append(row)
+
+    return {"dte_labels": dte_labels, "feature_labels": feature_labels, "grid": grid}
+
+
+def _compute_cross(df: pd.DataFrame, row_feature: str, col_feature: str) -> dict:
     valid = df.dropna(subset=[row_feature, col_feature])
     if len(valid) == 0:
         return {"feature_labels": [], "static_labels": [], "grid": [], "pct_feature_labels": [], "pct_grid": []}
 
-    # Raw buckets for row
-    row_q = np.linspace(0, 1, n_buckets + 1)
-    row_edges = np.unique(np.quantile(valid[row_feature].values, row_q))
-    col_edges = np.unique(np.quantile(valid[col_feature].values, row_q))
+    # 3 equal-count (tercile) buckets for both axes
+    terciles = [0, 1/3, 2/3, 1.0]
+    row_edges = np.unique(np.quantile(valid[row_feature].values, terciles))
+    col_edges = np.unique(np.quantile(valid[col_feature].values, terciles))
 
     def make_grid(r_edges, c_edges, feat_r, feat_c):
         f_labels = []
         s_labels = []
         for i in range(len(c_edges) - 1):
-            s_labels.append(f"{c_edges[i]:.4f}–{c_edges[i+1]:.4f}")
+            s_labels.append(f"{c_edges[i]:.2f}–{c_edges[i+1]:.2f}")
         grid = []
         for i in range(len(r_edges) - 1):
             rlo, rhi = r_edges[i], r_edges[i + 1]
-            f_labels.append(f"{rlo:.4f}–{rhi:.4f}")
+            f_labels.append(f"{rlo:.2f}–{rhi:.2f}")
             row = []
             for j in range(len(c_edges) - 1):
                 clo, chi = c_edges[j], c_edges[j + 1]
@@ -263,10 +299,10 @@ def _compute_cross(df: pd.DataFrame, row_feature: str, col_feature: str, n_bucke
     # Percentile grid
     valid_pct = valid.copy()
     valid_pct["_rpct"] = valid_pct[row_feature].rank(pct=True)
-    pct_labels = ["P0–P20", "P20–P40", "P40–P60", "P60–P80", "P80–P100"]
-    pct_edges = [0, 0.2, 0.4, 0.6, 0.8, 1.01]
+    pct_labels = ["P0–P33", "P33–P67", "P67–P100"]
+    pct_edges = [0, 1/3, 2/3, 1.01]
     pct_grid = []
-    for i in range(5):
+    for i in range(3):
         row = []
         rmask = (valid_pct["_rpct"] >= pct_edges[i]) & (valid_pct["_rpct"] < pct_edges[i + 1])
         for j in range(len(col_edges) - 1):
@@ -303,11 +339,6 @@ def get_strategies():
 def get_features():
     return [
         {"key": "RV_today", "label": "RV Today (Yang-Zhang)"},
-        {"key": "RV_3d_avg", "label": "RV 3d Avg"},
-        {"key": "RV_ratio", "label": "RV Ratio (1d/3d)"},
-        {"key": "RV_7d_avg", "label": "RV 7d Avg"},
-        {"key": "RV_7d_ratio", "label": "RV Ratio (1d/7d)"},
-        {"key": "RV_pctrank_30d", "label": "RV Pctile Rank (30d)"},
         {"key": "IV_7d", "label": "IV 7d Forward"},
         {"key": "IV_change_1d", "label": "IV Change 1d"},
         {"key": "VRP_today", "label": "VRP (IV−RV)"},
@@ -334,7 +365,7 @@ def get_plain_returns(strategy: str, start_date: str | None = None, end_date: st
         pnl_yr = grp["Net_Daily_PnL_PerCent"]
         std_yr = pnl_yr.std()
         mean_yr = pnl_yr.mean()
-        sh = (mean_yr / std_yr * math.sqrt(252)) if std_yr > 0 else None
+        sh = ((mean_yr * 252 - RISK_FREE_PCT) / (std_yr * math.sqrt(252))) if std_yr > 0 else None
         yearly.append({
             "year": int(yr),
             "total_pct": round(float(pnl_yr.sum()), 2),
@@ -376,11 +407,13 @@ def get_feature_buckets(strategy: str, feature: str, start_date: str | None = No
     merged = _merge(strategy, start_date, end_date)
     raw = _compute_buckets(merged, feature)
     pct = _compute_percentile_buckets(merged, feature)
+    dte_cross = _compute_dte_cross(merged, feature)
     return {
         "strategy": strategy,
         "feature": feature,
         "raw_buckets": raw,
         "percentile_buckets": pct,
+        "dte_cross": dte_cross,
     }
 
 
@@ -416,11 +449,6 @@ def get_rv_timeseries(start_date: str | None = None, end_date: str | None = None
             "low": round(float(r["low"]), 2),
             "close": round(float(r["close"]), 2),
             "RV_today": _clean(round(float(r["RV_today"]), 6)),
-            "RV_3d_avg": _clean(round(float(r["RV_3d_avg"]), 6)) if pd.notna(r["RV_3d_avg"]) else None,
-            "RV_ratio": _clean(round(float(r["RV_ratio"]), 6)) if pd.notna(r["RV_ratio"]) else None,
-            "RV_7d_avg": _clean(round(float(r["RV_7d_avg"]), 6)) if pd.notna(r.get("RV_7d_avg")) else None,
-            "RV_7d_ratio": _clean(round(float(r["RV_7d_ratio"]), 6)) if pd.notna(r.get("RV_7d_ratio")) else None,
-            "RV_pctrank_30d": _clean(round(float(r["RV_pctrank_30d"]), 2)) if pd.notna(r.get("RV_pctrank_30d")) else None,
             "IV_7d": _clean(round(float(r["IV_7d"]), 2)) if pd.notna(r.get("IV_7d")) else None,
             "IV_change_1d": _clean(round(float(r["IV_change_1d"]), 2)) if pd.notna(r.get("IV_change_1d")) else None,
             "VRP_today": _clean(round(float(r["VRP_today"]), 2)) if pd.notna(r.get("VRP_today")) else None,

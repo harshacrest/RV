@@ -15,7 +15,10 @@
       "Bash(curl -s http://localhost:5501/api/feature-buckets/dm/RV_today)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); b=d[''''raw_buckets''''][0]; print\\(json.dumps\\({k:b[k] for k in [''''label'''',''''trading_days'''',''''streak_mean'''',''''streak_median'''',''''streak_min'''',''''streak_max'''']}, indent=2\\)\\)\")",
       "Bash(time curl:*)",
-      "Bash(curl -s -m 5 \"http://localhost:5501/api/rv-timeseries?start_date=2020-12-31&end_date=2026-01-30\")"
+      "Bash(curl -s -m 5 \"http://localhost:5501/api/rv-timeseries?start_date=2020-12-31&end_date=2026-01-30\")",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f\"\"  {b[''''label'''']:25s} days={b[''''trading_days'''']}\"\"\\) for b in d[''''raw_buckets'''']]\" done)"
     ]
   }
 }

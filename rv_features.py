@@ -3,18 +3,10 @@ Compute daily Realized Volatility features from Nifty spot OHLC data,
 and merge IV 7-day constant-maturity forward from the IV:HV pipeline.
 
 Features:
-  1. RV_today    – Yang-Zhang single-day estimator, annualized (* sqrt(252))
-  2. RV_3d_avg   – Simple mean of previous 3 trading days' RV (excluding today)
-  3. RV_ratio    – RV_today / RV_3d_avg
-  4. RV_7d_avg   – Simple mean of previous 7 trading days' RV (excluding today)
-  5. RV_7d_ratio – RV_today / RV_7d_avg
-  6. RV_pctrank_30d – Percentile rank of RV_today over trailing 30-day window (0–100%)
-  7. IV_7d       – 7-day constant-maturity forward IV (close value, %)
-                   Linear interpolation between nearest & next expiry ATM IVs:
-                   w1 = (d2 - 7) / (d2 - d1),  w2 = (7 - d1) / (d2 - d1)
-                   IV_7d = w1 * atm_iv_e0 + w2 * atm_iv_e1
-  8. IV_change_1d – IV_7d_today − IV_7d_yesterday (daily change in 7d forward IV)
-  9. VRP_today   – IV_7d − RV_today (volatility risk premium)
+  1. RV_today     – Yang-Zhang single-day estimator, annualized (* sqrt(252) * 100)
+  2. IV_7d        – 7-day constant-maturity forward IV (close value, %)
+  3. IV_change_1d – IV_7d_today − IV_7d_yesterday (daily change in 7d forward IV)
+  4. VRP_today    – IV_7d − RV_today (volatility risk premium)
 """
 
 import numpy as np
@@ -42,23 +34,6 @@ def compute_rv_features(df: pd.DataFrame) -> pd.DataFrame:
     RS = rh * (rh - rc) + rl * (rl - rc)
     RS = np.maximum(RS,0)  # Ensure non-negative to avoid sqrt of negative numbers
     df['RV_today'] = np.sqrt(ro**2 + RS)     * np.sqrt(252) * 100  # Annualize by multiplying with sqrt(252)
-
-    # RV_3d_avg: mean of previous 3 trading days (excluding today)
-    df["RV_3d_avg"] = df["RV_today"].shift(1).rolling(window=3, min_periods=3).mean()
-
-    # RV_ratio
-    df["RV_ratio"] = df["RV_today"] / df["RV_3d_avg"]
-
-    # RV_7d_avg: mean of previous 7 trading days (excluding today)
-    df["RV_7d_avg"] = df["RV_today"].shift(1).rolling(window=7, min_periods=7).mean()
-
-    # RV_7d_ratio
-    df["RV_7d_ratio"] = df["RV_today"] / df["RV_7d_avg"]
-
-    # RV_pctrank_30d: percentile rank of RV_today (1-day) over trailing 30-day window
-    df["RV_pctrank_30d"] = df["RV_today"].rolling(window=30, min_periods=30).apply(
-        lambda w: (w.iloc[-1] > w.iloc[:-1]).sum() / (len(w) - 1) * 100, raw=False
-    )
 
     return df
 
@@ -120,8 +95,8 @@ def main():
     df["VRP_today"] = df["IV_7d"] - df["RV_today"]
 
     df = df[["timestamp", "open", "high", "low", "close",
-             "RV_today", "RV_3d_avg", "RV_ratio", "RV_7d_avg", "RV_7d_ratio",
-             "RV_pctrank_30d", "IV_7d", "IV_change_1d", "VRP_today"]]
+             "RV_today",
+             "IV_7d", "IV_change_1d", "VRP_today"]]
 
     df.to_parquet(OUTPUT_PATH, index=False)
     print(f"Saved {len(df)} rows to {OUTPUT_PATH}")
