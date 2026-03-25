@@ -22,7 +22,7 @@ STRATEGY_FILES = {
     "orion": BASE / "strategy_returns_orion_index_kd_60_40_sl10_max90_min20.xlsx",
 }
 
-FEATURES = ["RV_today", "IV_7d", "IV_change_1d", "VRP_today"]
+FEATURES = ["RV_today", "IV_7d", "IV_change_1d", "VRP_today", "IV_intraday_change"]
 
 RISK_FREE_PCT = 5.5  # annual risk-free rate in % (same units as Net_Daily_PnL_PerCent)
 
@@ -68,12 +68,42 @@ def _filter_dates(df: pd.DataFrame, date_col: str, start: str | None, end: str |
     return df
 
 
-def _merge(strategy: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
+VALID_SNAPSHOTS = {"0915", "0916", "1529", "1530"}
+
+# Mapping: snapshot → which pair to use for IV_intraday_change
+# 0915/1530 (edge times) → full day 0915-1530
+# 0916/1529 (inner times) → inner day 0916-1529
+INTRADAY_PAIRS = {
+    "0915": ("0915", "1530"),
+    "0916": ("0916", "1529"),
+    "1529": ("0916", "1529"),
+    "1530": ("0915", "1530"),
+}
+
+
+def _merge(strategy: str, start: str | None = None, end: str | None = None,
+           snapshot: str = "1530") -> pd.DataFrame:
     rv = RV_DATA.copy()
     st = STRAT_DATA[strategy].copy()
     merged = rv.merge(st, left_on="date", right_on="Date", how="inner")
     merged = merged.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
     merged = _filter_dates(merged, "date", start, end)
+
+    # Recompute IV-dependent features based on snapshot
+    if snapshot in VALID_SNAPSHOTS:
+        iv_col = f"IV_7d_{snapshot}"
+        if iv_col in merged.columns:
+            merged["IV_7d"] = merged[iv_col]
+            merged["IV_change_1d"] = merged["IV_7d"] - merged["IV_7d"].shift(1)
+            merged["VRP_today"] = merged["IV_7d"] - merged["RV_today"]
+
+        # IV_intraday_change: use the appropriate pair
+        open_snap, close_snap = INTRADAY_PAIRS[snapshot]
+        open_col = f"IV_7d_{open_snap}"
+        close_col = f"IV_7d_{close_snap}"
+        if open_col in merged.columns and close_col in merged.columns:
+            merged["IV_intraday_change"] = merged[open_col] - merged[close_col]
+
     return merged
 
 
@@ -259,6 +289,51 @@ def _compute_dte_cross(df: pd.DataFrame, feature: str) -> dict:
     return {"dte_labels": dte_labels, "feature_labels": feature_labels, "grid": grid}
 
 
+def _compute_composite_dte_cross(df: pd.DataFrame, row_feature: str, col_feature: str) -> dict:
+    """For each of the 9 (row×col) combos, break down by DTE."""
+    valid = df.dropna(subset=[row_feature, col_feature, "DTE"]).sort_values("date")
+    if len(valid) == 0:
+        return {"combo_labels": [], "dte_labels": [], "grid": []}
+
+    terciles = [0, 1/3, 2/3, 1.0]
+    row_edges = np.unique(np.quantile(valid[row_feature].values, terciles))
+    col_edges = np.unique(np.quantile(valid[col_feature].values, terciles))
+    dte_values = sorted(valid["DTE"].dropna().unique().astype(int).tolist())
+    dte_labels = [str(d) for d in dte_values]
+
+    combo_labels = []
+    grid = []  # each row = one combo, each col = one DTE
+
+    for i in range(len(row_edges) - 1):
+        rlo, rhi = row_edges[i], row_edges[i + 1]
+        if i == len(row_edges) - 2:
+            rmask = (valid[row_feature] >= rlo) & (valid[row_feature] <= rhi)
+        else:
+            rmask = (valid[row_feature] >= rlo) & (valid[row_feature] < rhi)
+        r_label = f"{rlo:.2f}–{rhi:.2f}"
+
+        for j in range(len(col_edges) - 1):
+            clo, chi = col_edges[j], col_edges[j + 1]
+            if j == len(col_edges) - 2:
+                cmask = (valid[col_feature] >= clo) & (valid[col_feature] <= chi)
+            else:
+                cmask = (valid[col_feature] >= clo) & (valid[col_feature] < chi)
+            c_label = f"{clo:.2f}–{chi:.2f}"
+
+            combo_mask = rmask & cmask
+            combo_label = f"{r_label} × {c_label}"
+            combo_labels.append({"row_label": r_label, "col_label": c_label, "combo_label": combo_label})
+
+            row = []
+            for dte_val in dte_values:
+                dmask = valid["DTE"].values == dte_val
+                sub = valid[combo_mask & dmask]
+                row.append(_bucket_metrics(sub, f"{combo_label} DTE={dte_val}", [float(rlo), float(rhi)]))
+            grid.append(row)
+
+    return {"combo_labels": combo_labels, "dte_labels": dte_labels, "grid": grid}
+
+
 def _compute_cross(df: pd.DataFrame, row_feature: str, col_feature: str) -> dict:
     valid = df.dropna(subset=[row_feature, col_feature])
     if len(valid) == 0:
@@ -342,12 +417,13 @@ def get_features():
         {"key": "IV_7d", "label": "IV 7d Forward"},
         {"key": "IV_change_1d", "label": "IV Change 1d"},
         {"key": "VRP_today", "label": "VRP (IV−RV)"},
+        {"key": "IV_intraday_change", "label": "IV Intraday Change (Open−Close)"},
     ]
 
 
 @app.get("/api/plain-returns/{strategy}")
-def get_plain_returns(strategy: str, start_date: str | None = None, end_date: str | None = None):
-    merged = _merge(strategy, start_date, end_date)
+def get_plain_returns(strategy: str, start_date: str | None = None, end_date: str | None = None, snapshot: str = "1530"):
+    merged = _merge(strategy, start_date, end_date, snapshot)
     merged = merged.sort_values("date")
     s = _summary(merged)
     pnl = merged["Net_Daily_PnL_PerCent"].values
@@ -403,8 +479,8 @@ def get_plain_returns(strategy: str, start_date: str | None = None, end_date: st
 
 
 @app.get("/api/feature-buckets/{strategy}/{feature}")
-def get_feature_buckets(strategy: str, feature: str, start_date: str | None = None, end_date: str | None = None):
-    merged = _merge(strategy, start_date, end_date)
+def get_feature_buckets(strategy: str, feature: str, start_date: str | None = None, end_date: str | None = None, snapshot: str = "1530"):
+    merged = _merge(strategy, start_date, end_date, snapshot)
     raw = _compute_buckets(merged, feature)
     pct = _compute_percentile_buckets(merged, feature)
     dte_cross = _compute_dte_cross(merged, feature)
@@ -424,16 +500,17 @@ def get_composite(
     col_feature: str = Query(...),
     start_date: str | None = None,
     end_date: str | None = None,
+    snapshot: str = "1530",
 ):
-    merged = _merge(strategy, start_date, end_date)
+    merged = _merge(strategy, start_date, end_date, snapshot)
     cross = _compute_cross(merged, row_feature, col_feature)
-    dte_cross = _compute_dte_cross(merged, row_feature)
+    composite_dte = _compute_composite_dte_cross(merged, row_feature, col_feature)
     return {
         "strategy": strategy,
         "row_feature": row_feature,
         "col_feature": col_feature,
         **cross,
-        "dte_cross": dte_cross,
+        "composite_dte_cross": composite_dte,
     }
 
 
