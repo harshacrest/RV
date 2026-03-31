@@ -23,7 +23,8 @@
       "Bash(kill 9800)",
       "Bash(npx next:*)",
       "Bash(ls -la /Users/harsha/Desktop/Research/RV/*.py)",
-      "Bash(ls -la /Users/harsha/Desktop/Research/RV/strategy*.xlsx)"
+      "Bash(ls -la /Users/harsha/Desktop/Research/RV/strategy*.xlsx)",
+      "Bash(curl -s \"http://localhost:5501/api/plain-returns/dmo\")"
     ]
   }
 }
