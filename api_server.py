@@ -33,8 +33,8 @@ RISK_FREE_PCT = 5.5  # annual risk-free rate in % (same units as Net_Daily_PnL_P
 # IV Level boundaries (from Step 4 of the framework)
 IV_L1_UPPER = 12
 IV_L2_UPPER = 17
-# PK/IV ratio thresholds (medians from the analysis)
-PKIV_L1_THRESHOLD = 0.63
+# PK/IV ratio thresholds — computed as medians at startup for equal splits
+PKIV_L1_THRESHOLD = 0.63  # fallback; overwritten by _init_thresholds()
 PKIV_L2_THRESHOLD = 0.65
 PKIV_L3_THRESHOLD = 0.67
 
@@ -100,11 +100,44 @@ def _load():
 RV_DATA, STRAT_DATA, DTE_DATA = _load()
 
 
+def _init_pkiv_thresholds():
+    """Compute PK/IV median per level from default snapshot for equal day splits."""
+    global PKIV_L1_THRESHOLD, PKIV_L2_THRESHOLD, PKIV_L3_THRESHOLD
+    try:
+        df = RV_DATA.copy()
+        df["PK_today"] = _compute_parkinson_vol(df["high"], df["low"])
+        iv_col = "IV_7d_1530"
+        if iv_col not in df.columns:
+            iv_col = "IV_7d"
+        df["_iv"] = df[iv_col]
+        df["IV_5d"] = df["_iv"].shift(1).rolling(5, min_periods=3).mean()
+        df["PK_5d"] = df["PK_today"].shift(1).rolling(5, min_periods=3).mean()
+        df["iv_lag"] = df["_iv"].shift(1)
+        df["PK_IV_ratio"] = np.where(df["IV_5d"] > 0, df["PK_5d"] / df["IV_5d"], np.nan)
+        clean = df.dropna(subset=["iv_lag", "PK_IV_ratio"])
+        l1 = clean[clean["iv_lag"] < IV_L1_UPPER]["PK_IV_ratio"]
+        l2 = clean[(clean["iv_lag"] >= IV_L1_UPPER) & (clean["iv_lag"] < IV_L2_UPPER)]["PK_IV_ratio"]
+        l3 = clean[clean["iv_lag"] >= IV_L2_UPPER]["PK_IV_ratio"]
+        if len(l1) > 10:
+            PKIV_L1_THRESHOLD = round(float(l1.median()), 4)
+        if len(l2) > 10:
+            PKIV_L2_THRESHOLD = round(float(l2.median()), 4)
+        if len(l3) > 10:
+            PKIV_L3_THRESHOLD = round(float(l3.median()), 4)
+        print(f"PK/IV thresholds (median): L1={PKIV_L1_THRESHOLD}, L2={PKIV_L2_THRESHOLD}, L3={PKIV_L3_THRESHOLD}")
+    except Exception as e:
+        print(f"Warning: could not compute PK/IV medians, using fallbacks. Error: {e}")
+
+
 def _compute_parkinson_vol(high: pd.Series, low: pd.Series) -> pd.Series:
     """Compute daily Parkinson volatility from High/Low prices (annualized, in %)."""
     log_hl = np.log(high / low)
     pk_daily = np.sqrt(log_hl ** 2 / (4 * np.log(2)))
     return pk_daily * np.sqrt(252) * 100
+
+
+# Compute median-based thresholds now that _compute_parkinson_vol is defined
+_init_pkiv_thresholds()
 
 
 def _compute_regime_features(rv_df: pd.DataFrame, snapshot: str = "1530") -> pd.DataFrame:
@@ -141,8 +174,20 @@ def _compute_regime_features(rv_df: pd.DataFrame, snapshot: str = "1530") -> pd.
     return df
 
 
-def _classify_regime(row: pd.Series) -> str | None:
-    """Classify a single day into one of 8 regime states."""
+def _compute_pkiv_medians(df: pd.DataFrame) -> tuple[float, float, float]:
+    """Compute per-level PK/IV medians from the given data for equal day splits."""
+    clean = df.dropna(subset=["iv_lag", "PK_IV_ratio"])
+    l1 = clean[clean["iv_lag"] < IV_L1_UPPER]["PK_IV_ratio"]
+    l2 = clean[(clean["iv_lag"] >= IV_L1_UPPER) & (clean["iv_lag"] < IV_L2_UPPER)]["PK_IV_ratio"]
+    l3 = clean[clean["iv_lag"] >= IV_L2_UPPER]["PK_IV_ratio"]
+    th_l1 = round(float(l1.median()), 4) if len(l1) > 10 else PKIV_L1_THRESHOLD
+    th_l2 = round(float(l2.median()), 4) if len(l2) > 10 else PKIV_L2_THRESHOLD
+    th_l3 = round(float(l3.median()), 4) if len(l3) > 10 else PKIV_L3_THRESHOLD
+    return th_l1, th_l2, th_l3
+
+
+def _classify_regime_with_thresholds(row: pd.Series, th_l1: float, th_l2: float, th_l3: float) -> str | None:
+    """Classify a single day into one of 8 regime states using given thresholds."""
     iv_lag = row.get("iv_lag")
     pk_iv = row.get("PK_IV_ratio")
     iv_chg = row.get("IV_chg_5d")
@@ -151,24 +196,26 @@ def _classify_regime(row: pd.Series) -> str | None:
         return None
 
     if iv_lag < IV_L1_UPPER:
-        # L1: PK/IV ratio only
-        return "L1 Safe" if pk_iv <= PKIV_L1_THRESHOLD else "L1 Exposed"
+        return "L1 Safe" if pk_iv <= th_l1 else "L1 Exposed"
     elif iv_lag < IV_L2_UPPER:
-        # L2: PK/IV ratio x IV direction
         iv_falling = iv_chg <= 0 if not pd.isna(iv_chg) else True
-        if pk_iv <= PKIV_L2_THRESHOLD:
+        if pk_iv <= th_l2:
             return "L2 Safe" if iv_falling else "L2 Caution-B"
         else:
             return "L2 Caution-A" if iv_falling else "L2 Risky"
     else:
-        # L3: PK/IV ratio only
-        return "L3 Safe" if pk_iv <= PKIV_L3_THRESHOLD else "L3 Exposed"
+        return "L3 Safe" if pk_iv <= th_l3 else "L3 Exposed"
 
 
 def _add_regime_column(df: pd.DataFrame) -> pd.DataFrame:
-    """Add regime_state column to a DataFrame that already has regime features."""
+    """Add regime_state column using per-level PK/IV medians for equal day splits."""
     df = df.copy()
-    df["regime_state"] = df.apply(_classify_regime, axis=1)
+    th_l1, th_l2, th_l3 = _compute_pkiv_medians(df)
+    # Store thresholds on the dataframe for downstream access
+    df.attrs["pkiv_l1"] = th_l1
+    df.attrs["pkiv_l2"] = th_l2
+    df.attrs["pkiv_l3"] = th_l3
+    df["regime_state"] = df.apply(lambda r: _classify_regime_with_thresholds(r, th_l1, th_l2, th_l3), axis=1)
     return df
 
 
@@ -791,6 +838,10 @@ def _regime_merge_all_strategies(start: str | None = None, end: str | None = Non
         # All-win: all 3 strategies positive on the same day
         result["all_win"] = (result[pnl_cols] > 0).all(axis=1)
 
+    # Merge DTE from trading_dates
+    result = result.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
+    result.drop(columns=["t_date"], inplace=True, errors="ignore")
+
     return result
 
 
@@ -1247,6 +1298,10 @@ def get_data_exploration(
     if pnl_cols:
         result["pnl_combined"] = result[pnl_cols].mean(axis=1)
 
+    # Merge DTE
+    result = result.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
+    result.drop(columns=["t_date"], inplace=True, errors="ignore")
+
     # Extract feature series (drop NaN)
     if feature not in result.columns:
         return {"error": f"Feature '{feature}' not found in computed data"}
@@ -1376,6 +1431,40 @@ def get_data_exploration(
             "scatter": scatter,
         }
 
+    # ═══ 6b. DTE-filtered Feature vs PnL correlations ═══
+    dte_feature_vs_pnl = {}
+    if "DTE" in valid.columns:
+        dte_vals_corr = sorted(valid["DTE"].dropna().unique().astype(int).tolist())
+        for dte_val in dte_vals_corr:
+            dte_label = str(dte_val)
+            dte_sub = valid[valid["DTE"] == dte_val]
+            if len(dte_sub) < 10:
+                continue
+            dte_corr_dict = {}
+            for skey in strat_keys:
+                pcol = f"pnl_{skey}"
+                if pcol not in dte_sub.columns:
+                    continue
+                pair = dte_sub[[feature, pcol]].dropna()
+                if len(pair) < 10:
+                    continue
+                fv = pair[feature].astype(float)
+                pv = pair[pcol].astype(float)
+                try:
+                    corr_val, corr_p_val = scipy_stats.pearsonr(fv.values, pv.values)
+                    sp_val, sp_p_val = scipy_stats.spearmanr(fv.values, pv.values)
+                except Exception:
+                    continue
+                dte_corr_dict[skey] = {
+                    "pearson_r": round(float(corr_val), 4),
+                    "pearson_p": round(float(corr_p_val), 6),
+                    "spearman_r": round(float(sp_val), 4),
+                    "spearman_p": round(float(sp_p_val), 6),
+                    "scatter": [],  # skip scatter for DTE subsets to keep response small
+                }
+            if dte_corr_dict:
+                dte_feature_vs_pnl[dte_label] = dte_corr_dict
+
     # ═══ 7. Quintile Bucket Analysis ═══
     # Compute quintile bins ONCE based on feature values only (consistent across all strategies)
     quintile_analysis = {}
@@ -1384,6 +1473,14 @@ def get_data_exploration(
         valid["_quintile"] = pd.qcut(vals, 5, labels=q_labels, duplicates="drop")
     except (ValueError, TypeError):
         valid["_quintile"] = pd.NA
+
+    # Pre-compute all_lose per quintile bucket (needed for AL% metric)
+    if "all_lose" not in valid.columns:
+        al_cols = [f"pnl_{s}" for s in ["dm", "wc", "orion"] if f"pnl_{s}" in valid.columns]
+        if al_cols:
+            valid["all_lose"] = (valid[al_cols] < 0).all(axis=1)
+        else:
+            valid["all_lose"] = False
 
     if valid["_quintile"].notna().sum() >= 25:
         for skey in strat_keys:
@@ -1396,6 +1493,8 @@ def get_data_exploration(
             for q in q_labels:
                 sub = valid[valid["_quintile"] == q]
                 pnl_sub = sub[pcol].dropna()
+                # AL% for this quintile bucket
+                al_pct_val = round(float(sub["all_lose"].sum()) / len(sub) * 100, 1) if len(sub) > 0 else 0.0
                 if len(pnl_sub) == 0:
                     buckets.append({
                         "quintile": q,
@@ -1405,6 +1504,7 @@ def get_data_exploration(
                         "feature_range": f"{sub[feature].min():.4f} – {sub[feature].max():.4f}",
                         "pnl_mean": None, "pnl_median": None, "pnl_std": None,
                         "win_rate": None, "pnl_sum": None, "sharpe": None,
+                        "al_pct": al_pct_val,
                     })
                     continue
                 n_with_pnl += len(pnl_sub)
@@ -1421,6 +1521,7 @@ def get_data_exploration(
                     "win_rate": round(float(pos / len(pnl_sub)), 4),
                     "pnl_sum": round(float(pnl_sub.sum()), 4),
                     "sharpe": round(float((pnl_sub.mean() * 252 - RISK_FREE_PCT) / (pnl_sub.std() * math.sqrt(252))), 2) if pnl_sub.std() > 0 else None,
+                    "al_pct": al_pct_val,
                 })
             if buckets:
                 quintile_analysis[skey] = {
@@ -1432,6 +1533,81 @@ def get_data_exploration(
 
         # Clean up temp column
         valid.drop(columns=["_quintile"], inplace=True, errors="ignore")
+
+    # ═══ DTE Quintile Analysis (each DTE value separately) ═══
+    dte_quintile_analysis = {}
+    if "DTE" in valid.columns:
+        dte_values_available = sorted(valid["DTE"].dropna().unique().astype(int).tolist())
+        for dte_val in dte_values_available:
+            dte_label = str(dte_val)
+            dte_sub = valid[valid["DTE"] == dte_val]
+            if len(dte_sub) < 20:
+                continue
+            dte_feat_vals = dte_sub[feature].dropna()
+            if len(dte_feat_vals) < 20:
+                continue
+            try:
+                dte_sub = dte_sub.copy()
+                dte_sub["_dte_q"] = pd.qcut(dte_sub[feature], 5, labels=q_labels, duplicates="drop")
+            except (ValueError, TypeError):
+                continue
+            if dte_sub["_dte_q"].notna().sum() < 25:
+                continue
+            # Ensure all_lose exists in dte_sub
+            if "all_lose" not in dte_sub.columns:
+                al_cols = [f"pnl_{s}" for s in ["dm", "wc", "orion"] if f"pnl_{s}" in dte_sub.columns]
+                if al_cols:
+                    dte_sub["all_lose"] = (dte_sub[al_cols] < 0).all(axis=1)
+                else:
+                    dte_sub["all_lose"] = False
+            dte_bucket_analysis = {}
+            for skey in strat_keys:
+                pcol = f"pnl_{skey}"
+                if pcol not in dte_sub.columns:
+                    continue
+                buckets = []
+                n_with_pnl = 0
+                for q in q_labels:
+                    sub = dte_sub[dte_sub["_dte_q"] == q]
+                    pnl_sub = sub[pcol].dropna()
+                    al_pct_val = round(float(sub["all_lose"].sum()) / len(sub) * 100, 1) if len(sub) > 0 else 0.0
+                    if len(pnl_sub) == 0:
+                        buckets.append({
+                            "quintile": q,
+                            "count": int(len(sub)),
+                            "count_with_pnl": 0,
+                            "feature_mean": round(float(sub[feature].mean()), 6) if len(sub) > 0 else None,
+                            "feature_range": f"{sub[feature].min():.4f} – {sub[feature].max():.4f}" if len(sub) > 0 else None,
+                            "pnl_mean": None, "pnl_median": None, "pnl_std": None,
+                            "win_rate": None, "pnl_sum": None, "sharpe": None,
+                            "al_pct": al_pct_val,
+                        })
+                        continue
+                    n_with_pnl += len(pnl_sub)
+                    pos = (pnl_sub > 0).sum()
+                    buckets.append({
+                        "quintile": q,
+                        "count": int(len(sub)),
+                        "count_with_pnl": int(len(pnl_sub)),
+                        "feature_mean": round(float(sub[feature].mean()), 6),
+                        "feature_range": f"{sub[feature].min():.4f} – {sub[feature].max():.4f}",
+                        "pnl_mean": round(float(pnl_sub.mean()), 4),
+                        "pnl_median": round(float(pnl_sub.median()), 4),
+                        "pnl_std": round(float(pnl_sub.std()), 4) if len(pnl_sub) > 1 else None,
+                        "win_rate": round(float(pos / len(pnl_sub)), 4),
+                        "pnl_sum": round(float(pnl_sub.sum()), 4),
+                        "sharpe": round(float((pnl_sub.mean() * 252 - RISK_FREE_PCT) / (pnl_sub.std() * math.sqrt(252))), 2) if pnl_sub.std() > 0 else None,
+                        "al_pct": al_pct_val,
+                    })
+                if buckets:
+                    dte_bucket_analysis[skey] = {
+                        "buckets": buckets,
+                        "n_total": int(len(dte_feat_vals)),
+                        "n_used": n_with_pnl,
+                        "n_dropped_missing_pnl": int(len(dte_feat_vals)) - n_with_pnl,
+                    }
+            if dte_bucket_analysis:
+                dte_quintile_analysis[dte_label] = dte_bucket_analysis
 
     # ═══ 8. Regime-Conditional Distributions ═══
     regime_distributions = []
@@ -1513,7 +1689,9 @@ def get_data_exploration(
         "acf_confidence_bound": round(float(conf_bound), 4) if conf_bound else None,
         "stationarity": stationarity,
         "feature_vs_pnl": feature_vs_pnl,
+        "dte_feature_vs_pnl": dte_feature_vs_pnl,
         "quintile_analysis": quintile_analysis,
+        "dte_quintile_analysis": dte_quintile_analysis,
         "regime_distributions": regime_distributions,
         "outliers": outliers,
         "rolling_stats": rolling_stats,
@@ -1523,6 +1701,9 @@ def get_data_exploration(
 # ════════════════════════════════════════════════════════════════════════════
 # Regime Classification Dashboard — Step 2, 3, 4 endpoints
 # ════════════════════════════════════════════════════════════════════════════
+
+
+# DTE values analysed individually (0 = expiry day, 5 = 5 days to expiry)
 
 
 def _sharpe(pnl_series):
@@ -1597,18 +1778,76 @@ def get_feature_ranking(
                 "orion_avg": _clean(round(float(qs["pnl_orion"].mean()), 4)) if "pnl_orion" in qs.columns else None,
                 "orion_wr": _clean(round(float((qs["pnl_orion"] > 0).mean()), 2)) if "pnl_orion" in qs.columns else None,
                 "combined_avg": _clean(round(float(qs["pnl_combined"].mean()), 4)),
+            })
+            # Compute per-strategy Sharpe (separately to avoid walrus scoping issues)
+            _last = quintiles[-1]
+            for _sk, _sc in [("dm", "pnl_dm"), ("wc", "pnl_wc"), ("orion", "pnl_orion"), ("combined", "pnl_combined")]:
+                _sh = _sharpe(qs[_sc]) if _sc in qs.columns else None
+                _last[f"{_sk}_sharpe"] = _clean(round(float(_sh), 2)) if _sh is not None else None
+            _last.update({
                 "al_pct": round(al_pct, 1),
                 "aw_pct": round(aw_pct, 1),
             })
 
-        # AL spread: worst - best (signed)
-        if al_by_q:
-            worst_q = max(al_by_q, key=al_by_q.get)
-            best_q = min(al_by_q, key=al_by_q.get)
-            al_spread = al_by_q[worst_q] - al_by_q[best_q]
-        else:
-            worst_q = best_q = "Q1"
-            al_spread = 0.0
+        # ── DTE quintiles (each DTE value separately) ──
+        dte_quintiles = {}
+        dte_al_spread = {}
+        if "DTE" in sub.columns:
+            dte_vals_available = sorted(sub["DTE"].dropna().unique().astype(int).tolist())
+            for dte_val in dte_vals_available:
+                dte_label = str(dte_val)
+                dte_sub = sub[sub["DTE"] == dte_val]
+                if len(dte_sub) < 20:
+                    continue
+                try:
+                    dte_sub = dte_sub.copy()
+                    dte_sub["_dq"] = pd.qcut(dte_sub[fkey], 5, labels=["Q1", "Q2", "Q3", "Q4", "Q5"], duplicates="drop")
+                except ValueError:
+                    continue
+                dte_q_list = []
+                dte_al_by_q = {}
+                for q_label in ["Q1", "Q2", "Q3", "Q4", "Q5"]:
+                    qs = dte_sub[dte_sub["_dq"] == q_label]
+                    if len(qs) == 0:
+                        continue
+                    n = len(qs)
+                    al_pct = float(qs["all_lose"].sum()) / n * 100 if n > 0 else 0
+                    aw_pct = float(qs["all_win"].sum()) / n * 100 if n > 0 else 0
+                    dte_al_by_q[q_label] = al_pct
+                    fmin = float(qs[fkey].min())
+                    fmax = float(qs[fkey].max())
+                    q_dict = {
+                        "quintile": q_label,
+                        "range": f"{fmin:.2f}-{fmax:.2f}",
+                        "n": n,
+                        "dm_avg": _clean(round(float(qs["pnl_dm"].mean()), 4)) if "pnl_dm" in qs.columns else None,
+                        "dm_wr": _clean(round(float((qs["pnl_dm"] > 0).mean()), 2)) if "pnl_dm" in qs.columns else None,
+                        "wc_avg": _clean(round(float(qs["pnl_wc"].mean()), 4)) if "pnl_wc" in qs.columns else None,
+                        "wc_wr": _clean(round(float((qs["pnl_wc"] > 0).mean()), 2)) if "pnl_wc" in qs.columns else None,
+                        "orion_avg": _clean(round(float(qs["pnl_orion"].mean()), 4)) if "pnl_orion" in qs.columns else None,
+                        "orion_wr": _clean(round(float((qs["pnl_orion"] > 0).mean()), 2)) if "pnl_orion" in qs.columns else None,
+                        "combined_avg": _clean(round(float(qs["pnl_combined"].mean()), 4)),
+                    }
+                    for _sk, _sc in [("dm", "pnl_dm"), ("wc", "pnl_wc"), ("orion", "pnl_orion"), ("combined", "pnl_combined")]:
+                        _sh = _sharpe(qs[_sc]) if _sc in qs.columns else None
+                        q_dict[f"{_sk}_sharpe"] = _clean(round(float(_sh), 2)) if _sh is not None else None
+                    q_dict.update({
+                        "al_pct": round(al_pct, 1),
+                        "aw_pct": round(aw_pct, 1),
+                    })
+                    dte_q_list.append(q_dict)
+                if dte_q_list:
+                    dte_quintiles[dte_label] = dte_q_list
+                    d_q1_al = dte_al_by_q.get("Q1", 0)
+                    d_q5_al = dte_al_by_q.get("Q5", 0)
+                    dte_al_spread[dte_label] = round(d_q5_al - d_q1_al, 1)
+
+        # AL spread: Q5 AL% minus Q1 AL% (portfolio-level discrimination)
+        q1_al = al_by_q.get("Q1", 0)
+        q5_al = al_by_q.get("Q5", 0)
+        al_spread = q5_al - q1_al
+        best_q = min(al_by_q, key=al_by_q.get) if al_by_q else "Q1"
+        worst_q = max(al_by_q, key=al_by_q.get) if al_by_q else "Q1"
 
         # Strategy correlations (must dropna per pair to avoid NaN from pearsonr)
         dm_corr = wc_corr = orion_corr = al_corr = 0.0
@@ -1633,7 +1872,8 @@ def get_feature_ranking(
         except Exception:
             pass
 
-        dm_orion_gap = abs(dm_corr) + abs(orion_corr)
+        # Correlation gap: |corr_DM - corr_Orion|
+        dm_orion_gap = abs(dm_corr - orion_corr)
 
         # Verdict logic
         if fkey == "IV_7d":
@@ -1675,6 +1915,8 @@ def get_feature_ranking(
             "verdict": verdict,
             "verdict_reason": reason,
             "quintiles": quintiles,
+            "dte_quintiles": dte_quintiles,
+            "dte_al_spread": dte_al_spread,
         })
 
     # Sort by abs(al_spread) descending
@@ -1954,6 +2196,13 @@ def get_regime_construction(
     merged = _regime_merge_all_strategies(start_date, end_date, snapshot)
     merged = merged.dropna(subset=["pnl_combined", "iv_lag"])
 
+    # Compute per-level PK/IV medians from this filtered data for equal day splits
+    pkiv_l1, pkiv_l2, pkiv_l3 = _compute_pkiv_medians(merged)
+    # Re-classify regime states using these data-specific medians
+    merged["regime_state"] = merged.apply(
+        lambda r: _classify_regime_with_thresholds(r, pkiv_l1, pkiv_l2, pkiv_l3), axis=1
+    )
+
     # ── Part 1: IV Boundary Configs ──
     boundary_configs_input = [
         ([12], "2 levels: 12"),
@@ -2126,31 +2375,52 @@ def get_regime_construction(
 
     # L1 analysis
     l1_data = merged[l1_mask]
-    l1_quintiles, l1_final, l1_th_ac = _pk_iv_quintile_analysis(l1_data, PKIV_L1_THRESHOLD)
+    l1_quintiles, l1_final, l1_th_ac = _pk_iv_quintile_analysis(l1_data, pkiv_l1)
     l1_final_named = []
     for fs in l1_final:
         fs_copy = dict(fs)
         fs_copy["state"] = f"L1 {fs['state']}"
         l1_final_named.append(fs_copy)
 
+    # L1 strategy profiles per state
+    l1_strat_profiles = []
+    for fs in l1_final_named:
+        sname = fs["state"]
+        if "Safe" in sname:
+            ss = l1_data[l1_data["PK_IV_ratio"] <= pkiv_l1]
+        else:
+            ss = l1_data[l1_data["PK_IV_ratio"] > pkiv_l1]
+        sp = {"state": sname}
+        for skey in ["dm", "wc", "orion"]:
+            col = f"pnl_{skey}"
+            if col in ss.columns and ss[col].notna().sum() > 0:
+                sp[f"{skey}_avg"] = _clean(round(float(ss[col].mean()), 4))
+                shr = _sharpe(ss[col])
+                sp[f"{skey}_sharpe"] = _clean(round(float(shr), 2)) if shr is not None else None
+            else:
+                sp[f"{skey}_avg"] = None
+                sp[f"{skey}_sharpe"] = None
+        l1_strat_profiles.append(sp)
+
     per_level_l1 = {
         "description": "IV < 12: PK/IV Ratio is the Signal",
         "pk_iv_quintiles": l1_quintiles,
         "final_states": l1_final_named,
-        "threshold": PKIV_L1_THRESHOLD,
+        "threshold": pkiv_l1,
         "threshold_ac": l1_th_ac,
+        "strategy_profiles": l1_strat_profiles,
     }
 
     # L2 analysis — 2x2 matrix
     l2_data = merged[l2_mask].dropna(subset=["PK_IV_ratio", "IV_chg_5d"]).copy()
-    pk_iv_hi = l2_data["PK_IV_ratio"] > PKIV_L2_THRESHOLD
+    pk_iv_hi = l2_data["PK_IV_ratio"] > pkiv_l2
     iv_rising = l2_data["IV_chg_5d"] > 0
 
     l2_state_defs = [
-        ("L2 Safe", ~pk_iv_hi & ~iv_rising, f"<={PKIV_L2_THRESHOLD}", "Fall"),
-        ("L2 Caution-A", pk_iv_hi & ~iv_rising, f">{PKIV_L2_THRESHOLD}", "Fall"),
-        ("L2 Caution-B", ~pk_iv_hi & iv_rising, f"<={PKIV_L2_THRESHOLD}", "Rise"),
-        ("L2 Risky", pk_iv_hi & iv_rising, f">{PKIV_L2_THRESHOLD}", "Rise"),
+        ("L2 Safe", ~pk_iv_hi & ~iv_rising, f"<={pkiv_l2}", "Fall"),
+        ("L2 Caution-A", pk_iv_hi & ~iv_rising, f">{pkiv_l2}", "Fall"),
+        ("L2 Caution-B", ~pk_iv_hi & iv_rising, f"<={pkiv_l2}", "Rise"),
+        ("L2 Risky", pk_iv_hi & iv_rising, f">{pkiv_l2}", "Rise"),
     ]
 
     l2_final = []
@@ -2195,23 +2465,44 @@ def get_regime_construction(
         "description": "IV 12-17: IV Direction + PK/IV Ratio",
         "final_states": l2_final,
         "strategy_profiles": l2_strat_profiles,
-        "pk_iv_threshold": PKIV_L2_THRESHOLD,
+        "pk_iv_threshold": pkiv_l2,
     }
 
     # L3 analysis
     l3_data = merged[l3_mask]
-    l3_quintiles, l3_final, l3_th_ac = _pk_iv_quintile_analysis(l3_data, PKIV_L3_THRESHOLD)
+    l3_quintiles, l3_final, l3_th_ac = _pk_iv_quintile_analysis(l3_data, pkiv_l3)
     l3_final_named = []
     for fs in l3_final:
         fs_copy = dict(fs)
         fs_copy["state"] = f"L3 {fs['state']}"
         l3_final_named.append(fs_copy)
 
+    # L3 strategy profiles per state
+    l3_strat_profiles = []
+    for fs in l3_final_named:
+        sname = fs["state"]
+        if "Safe" in sname:
+            ss = l3_data[l3_data["PK_IV_ratio"] <= pkiv_l3]
+        else:
+            ss = l3_data[l3_data["PK_IV_ratio"] > pkiv_l3]
+        sp = {"state": sname}
+        for skey in ["dm", "wc", "orion"]:
+            col = f"pnl_{skey}"
+            if col in ss.columns and ss[col].notna().sum() > 0:
+                sp[f"{skey}_avg"] = _clean(round(float(ss[col].mean()), 4))
+                shr = _sharpe(ss[col])
+                sp[f"{skey}_sharpe"] = _clean(round(float(shr), 2)) if shr is not None else None
+            else:
+                sp[f"{skey}_avg"] = None
+                sp[f"{skey}_sharpe"] = None
+        l3_strat_profiles.append(sp)
+
     per_level_l3 = {
         "description": "IV > 17: PK/IV Ratio — Higher Stakes",
         "pk_iv_quintiles": l3_quintiles,
         "final_states": l3_final_named,
-        "threshold": PKIV_L3_THRESHOLD,
+        "threshold": pkiv_l3,
+        "strategy_profiles": l3_strat_profiles,
     }
 
     per_level = {"L1": per_level_l1, "L2": per_level_l2, "L3": per_level_l3}
@@ -2219,14 +2510,14 @@ def get_regime_construction(
     # ── Part 3: Complete Regime Table ──
     complete_table = []
     regime_rules = {
-        "L1 Safe": f"IV<{IV_L1_UPPER}, PK/IV<={PKIV_L1_THRESHOLD}",
-        "L1 Exposed": f"IV<{IV_L1_UPPER}, PK/IV>{PKIV_L1_THRESHOLD}",
-        "L2 Safe": f"IV {IV_L1_UPPER}-{IV_L2_UPPER}, PK/IV<={PKIV_L2_THRESHOLD}, IV falling",
-        "L2 Caution-A": f"IV {IV_L1_UPPER}-{IV_L2_UPPER}, PK/IV>{PKIV_L2_THRESHOLD}, IV falling",
-        "L2 Caution-B": f"IV {IV_L1_UPPER}-{IV_L2_UPPER}, PK/IV<={PKIV_L2_THRESHOLD}, IV rising",
-        "L2 Risky": f"IV {IV_L1_UPPER}-{IV_L2_UPPER}, PK/IV>{PKIV_L2_THRESHOLD}, IV rising",
-        "L3 Safe": f"IV>={IV_L2_UPPER}, PK/IV<={PKIV_L3_THRESHOLD}",
-        "L3 Exposed": f"IV>={IV_L2_UPPER}, PK/IV>{PKIV_L3_THRESHOLD}",
+        "L1 Safe": f"IV<{IV_L1_UPPER}, PK/IV<={pkiv_l1}",
+        "L1 Exposed": f"IV<{IV_L1_UPPER}, PK/IV>{pkiv_l1}",
+        "L2 Safe": f"IV {IV_L1_UPPER}-{IV_L2_UPPER}, PK/IV<={pkiv_l2}, IV falling",
+        "L2 Caution-A": f"IV {IV_L1_UPPER}-{IV_L2_UPPER}, PK/IV>{pkiv_l2}, IV falling",
+        "L2 Caution-B": f"IV {IV_L1_UPPER}-{IV_L2_UPPER}, PK/IV<={pkiv_l2}, IV rising",
+        "L2 Risky": f"IV {IV_L1_UPPER}-{IV_L2_UPPER}, PK/IV>{pkiv_l2}, IV rising",
+        "L3 Safe": f"IV>={IV_L2_UPPER}, PK/IV<={pkiv_l3}",
+        "L3 Exposed": f"IV>={IV_L2_UPPER}, PK/IV>{pkiv_l3}",
     }
 
     total_days = len(merged[merged["regime_state"].notna()])
@@ -2291,11 +2582,177 @@ def get_regime_construction(
         "sharpe": _clean(round(float(overall_sh), 2)) if overall_sh is not None else None,
     }
 
+    # ── DTE Breakdown per Regime State ──
+    dte_breakdown = {}
+    if "DTE" in merged.columns:
+        for state in REGIME_STATES:
+            state_sub = merged[merged["regime_state"] == state]
+            if len(state_sub) == 0:
+                continue
+            state_dte_rows = []
+            dte_vals_avail = sorted(state_sub["DTE"].dropna().unique().astype(int).tolist())
+            for dte_val in dte_vals_avail:
+                dte_label = str(dte_val)
+                dsub = state_sub[state_sub["DTE"] == dte_val]
+                dn = len(dsub)
+                if dn == 0:
+                    continue
+                d_al_pct = float(dsub["all_lose"].sum()) / dn * 100
+                d_aw_pct = float(dsub["all_win"].sum()) / dn * 100
+                d_port_avg = float(dsub["pnl_combined"].mean()) if "pnl_combined" in dsub.columns else 0
+                d_sh = _sharpe(dsub["pnl_combined"]) if "pnl_combined" in dsub.columns else None
+                dte_row = {
+                    "dte": int(dte_val),
+                    "days": dn,
+                    "al_pct": round(d_al_pct, 1),
+                    "aw_pct": round(d_aw_pct, 1),
+                    "port_avg": _clean(round(d_port_avg, 4)),
+                    "sharpe": _clean(round(float(d_sh), 2)) if d_sh is not None else None,
+                }
+                for skey in ["dm", "wc", "orion"]:
+                    col = f"pnl_{skey}"
+                    if col in dsub.columns and dsub[col].notna().sum() > 0:
+                        dte_row[f"{skey}_avg"] = _clean(round(float(dsub[col].mean()), 4))
+                        s_sh = _sharpe(dsub[col])
+                        dte_row[f"{skey}_sharpe"] = _clean(round(float(s_sh), 2)) if s_sh is not None else None
+                    else:
+                        dte_row[f"{skey}_avg"] = None
+                        dte_row[f"{skey}_sharpe"] = None
+                state_dte_rows.append(dte_row)
+            if state_dte_rows:
+                dte_breakdown[state] = state_dte_rows
+
+    # ── VRP per regime state ──
+    vrp_by_state = {}
+    if "VRP_today" in merged.columns:
+        for state in REGIME_STATES:
+            sub = merged[merged["regime_state"] == state]
+            vrp_vals = sub["VRP_today"].dropna()
+            if len(vrp_vals) > 0:
+                vrp_by_state[state] = _clean(round(float(vrp_vals.mean()), 2))
+            else:
+                vrp_by_state[state] = None
+
+    # ── Tested and failed per level (computed, not hardcoded) ──
+    def _test_alternative_splitter(level_data, feature_col, label):
+        """Try splitting by median of feature_col, report AL spread."""
+        if feature_col not in level_data.columns:
+            return None
+        clean = level_data.dropna(subset=[feature_col, "pnl_combined"])
+        if len(clean) < 20:
+            return None
+        median_val = clean[feature_col].median()
+        lo = clean[clean[feature_col] <= median_val]
+        hi = clean[clean[feature_col] > median_val]
+        if len(lo) < 5 or len(hi) < 5:
+            return None
+        al_lo = float(lo["all_lose"].sum()) / len(lo) * 100
+        al_hi = float(hi["all_lose"].sum()) / len(hi) * 100
+        spread = round(al_hi - al_lo, 1)
+        # Autocorrelation
+        try:
+            binary = (clean[feature_col] > median_val).astype(float)
+            ac_val = float(sm_acf(binary.values, nlags=1, fft=True)[1])
+            ac_str = f"AC={ac_val:.2f}"
+        except Exception:
+            ac_str = "AC=n/a"
+        return {"approach": label, "result": f"AL spread {spread:+.1f}pp, {ac_str}. {'Weak' if abs(spread) < 4 else 'Decent'} discrimination."}
+
+    l1_tested = []
+    for col, lbl in [("IV_chg_5d", "IV direction (avg_chg_5d)"), ("VRP_today", "VRP alone")]:
+        r = _test_alternative_splitter(l1_data, col, lbl)
+        if r:
+            l1_tested.append(r)
+
+    # Additional L1 test: 1d IV change (raw, not averaged)
+    if "IV_change_1d" in l1_data.columns:
+        r_1d = _test_alternative_splitter(l1_data, "IV_change_1d", "1d IV change (raw)")
+        if r_1d:
+            r_1d["result"] += " Doesn't persist day-to-day. Combined with PK/IV flips at 2-3d window."
+            l1_tested.append(r_1d)
+
+    # Additional L1 test: IV mean reversion (direction flip from previous day)
+    l1_clean_mr = l1_data.dropna(subset=["IV_chg_5d", "pnl_combined"]).copy()
+    if len(l1_clean_mr) >= 20:
+        l1_clean_mr["_iv_reverting"] = l1_clean_mr["IV_chg_5d"].shift(1) * l1_clean_mr["IV_chg_5d"] < 0
+        rev = l1_clean_mr[l1_clean_mr["_iv_reverting"] == True]
+        cont = l1_clean_mr[l1_clean_mr["_iv_reverting"] == False]
+        if len(rev) >= 5 and len(cont) >= 5:
+            al_rev = float(rev["all_lose"].sum()) / len(rev) * 100
+            al_cont = float(cont["all_lose"].sum()) / len(cont) * 100
+            mr_spread = round(al_cont - al_rev, 1)
+            l1_tested.append({
+                "approach": "IV mean reversion",
+                "result": f"Reverting AL={al_rev:.1f}%, continuing AL={al_cont:.1f}%, spread {mr_spread:+.1f}pp. Exists but doesn't separate risk cleanly."
+            })
+
+    per_level_l1["tested_and_failed"] = l1_tested
+
+    l2_tested = []
+    # L2: test PK/IV alone without IV direction
+    l2_clean = l2_data.dropna(subset=["PK_IV_ratio", "pnl_combined"])
+    if len(l2_clean) >= 20:
+        pk_med = l2_clean["PK_IV_ratio"].median()
+        lo = l2_clean[l2_clean["PK_IV_ratio"] <= pk_med]
+        hi = l2_clean[l2_clean["PK_IV_ratio"] > pk_med]
+        if len(lo) >= 5 and len(hi) >= 5:
+            al_lo = float(lo["all_lose"].sum()) / len(lo) * 100
+            al_hi = float(hi["all_lose"].sum()) / len(hi) * 100
+            l2_pk_only = round(al_hi - al_lo, 1)
+            # Compare with 4-state gap
+            l2_with_dir = l2_data.dropna(subset=["PK_IV_ratio", "IV_chg_5d", "pnl_combined"])
+            if len(l2_with_dir) >= 20:
+                pk_med_4 = l2_with_dir["PK_IV_ratio"].median()
+                safe_4 = l2_with_dir[(l2_with_dir["PK_IV_ratio"] <= pk_med_4) & (l2_with_dir["IV_chg_5d"] <= 0)]
+                risky_4 = l2_with_dir[(l2_with_dir["PK_IV_ratio"] > pk_med_4) & (l2_with_dir["IV_chg_5d"] > 0)]
+                if len(safe_4) >= 5 and len(risky_4) >= 5:
+                    al_safe_4 = float(safe_4["all_lose"].sum()) / len(safe_4) * 100
+                    al_risky_4 = float(risky_4["all_lose"].sum()) / len(risky_4) * 100
+                    l2_full_gap = round(al_risky_4 - al_safe_4, 1)
+                    l2_tested.append({"approach": "PK/IV alone (L1 rules on L2)",
+                                      "result": f"AL spread {l2_pk_only:+.1f}pp vs {l2_full_gap:+.1f}pp with IV direction. Missing {round(l2_full_gap - l2_pk_only, 1)}pp of separation."})
+                else:
+                    l2_tested.append({"approach": "PK/IV alone (no IV direction)", "result": f"AL spread {l2_pk_only:+.1f}pp — decent but misses IV direction signal."})
+            else:
+                l2_tested.append({"approach": "PK/IV alone (no IV direction)", "result": f"AL spread {l2_pk_only:+.1f}pp — decent but misses IV direction signal."})
+
+    # Cross-level: L2 rules (4-state) applied to L1
+    l1_cross = l1_data.dropna(subset=["PK_IV_ratio", "IV_chg_5d", "pnl_combined"])
+    if len(l1_cross) >= 20:
+        l1_pk_med = l1_cross["PK_IV_ratio"].median()
+        # L1 with 2 states (current)
+        l1_safe_2 = l1_cross[l1_cross["PK_IV_ratio"] <= l1_pk_med]
+        al_l1_safe_2 = float(l1_safe_2["all_lose"].sum()) / len(l1_safe_2) * 100 if len(l1_safe_2) > 0 else 0
+        # L1 with 4 states (L2 rules)
+        l1_safe_4 = l1_cross[(l1_cross["PK_IV_ratio"] <= l1_pk_med) & (l1_cross["IV_chg_5d"] <= 0)]
+        if len(l1_safe_4) >= 5:
+            al_l1_safe_4 = float(l1_safe_4["all_lose"].sum()) / len(l1_safe_4) * 100
+            direction = "worse" if al_l1_safe_4 > al_l1_safe_2 else "better"
+            l2_tested.append({
+                "approach": "L2 rules on L1 (adding IV direction to L1)",
+                "result": f"L1 Safe goes from {al_l1_safe_2:.1f}% to {al_l1_safe_4:.1f}% AL — makes it {direction}. IV direction is noise at low IV."
+            })
+
+    per_level_l2["tested_and_failed"] = l2_tested
+
+    l3_tested = []
+    for col, lbl in [("IV_chg_5d", "IV direction at L3")]:
+        r = _test_alternative_splitter(l3_data, col, lbl)
+        if r:
+            # Note: at L3, IV is almost always rising — direction can't split
+            if col == "IV_chg_5d" and col in l3_data.columns:
+                rising_pct = (l3_data[col].dropna() > 0).mean() * 100
+                r["result"] += f" But {rising_pct:.0f}% of L3 days have rising IV — direction can't split."
+            l3_tested.append(r)
+    per_level_l3["tested_and_failed"] = l3_tested
+
     return {
         "boundary_configs": boundary_configs,
         "per_level": per_level,
         "complete_table": complete_table,
         "overall": overall,
+        "dte_breakdown": dte_breakdown,
+        "vrp_by_state": vrp_by_state,
     }
 
 
