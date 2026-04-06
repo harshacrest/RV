@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snapshot Comparison — Regime Construction Deep Analysis</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --surface: #111820;
+    --surface2: #161d27;
+    --border: #1e2a38;
+    --text: #e0e6ed;
+    --text-dim: #6b7d93;
+    --green: #00e676;
+    --red: #ff5252;
+    --amber: #ffab40;
+    --purple: #c084fc;
+    --cyan: #22d3ee;
+    --blue: #60a5fa;
+    --pink: #f472b6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 32px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 22px; font-weight: 700; color: var(--cyan); margin-bottom: 4px; letter-spacing: -0.5px; }
+  .subtitle { color: var(--text-dim); font-size: 11px; margin-bottom: 32px; }
+  h2 { font-size: 15px; font-weight: 600; margin: 32px 0 6px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 12px; font-weight: 600; margin: 20px 0 8px 0; color: var(--purple); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin: 16px 0; }
+  .verdict-card { background: linear-gradient(135deg, rgba(0,230,118,0.06), rgba(34,211,238,0.04)); border: 1px solid rgba(0,230,118,0.2); }
+  .critical-card { background: linear-gradient(135deg, rgba(255,82,82,0.08), rgba(244,114,182,0.04)); border: 1px solid rgba(255,82,82,0.25); }
+  .insight-card { background: linear-gradient(135deg, rgba(192,132,252,0.06), rgba(96,165,250,0.04)); border: 1px solid rgba(192,132,252,0.2); }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin: 10px 0; }
+  th { text-align: right; padding: 6px 10px; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  th:first-child { text-align: left; }
+  td { text-align: right; padding: 5px 10px; border-bottom: 1px solid rgba(30,42,56,0.4); }
+  td:first-child { text-align: left; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .g { color: var(--green); } .r { color: var(--red); } .a { color: var(--amber); }
+  .p { color: var(--purple); } .c { color: var(--cyan); } .b { color: var(--blue); }
+  .pk { color: var(--pink); } .dim { color: var(--text-dim); } .bold { font-weight: 700; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .tag-identical { background: rgba(0,230,118,0.15); color: var(--green); }
+  .tag-different { background: rgba(255,171,64,0.15); color: var(--amber); }
+  .tag-critical { background: rgba(255,82,82,0.15); color: var(--red); }
+  .tag-info { background: rgba(96,165,250,0.15); color: var(--blue); }
+  .tag-verdict { background: rgba(34,211,238,0.15); color: var(--cyan); }
+  .state-safe { color: var(--green); } .state-exposed { color: var(--amber); }
+  .state-caution { color: var(--cyan); } .state-risky { color: var(--red); }
+  .highlight-row td { background: rgba(192,132,252,0.06) !important; }
+  .section-num { display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; background: rgba(192,132,252,0.15); color: var(--purple); font-weight: 700; font-size: 11px; margin-right: 8px; }
+  .callout { padding: 12px 16px; border-radius: 6px; margin: 12px 0; font-size: 11px; line-height: 1.7; }
+  .callout-critical { background: rgba(255,82,82,0.08); border-left: 3px solid var(--red); }
+  .callout-success { background: rgba(0,230,118,0.06); border-left: 3px solid var(--green); }
+  .callout-info { background: rgba(96,165,250,0.06); border-left: 3px solid var(--blue); }
+  .callout-warning { background: rgba(255,171,64,0.06); border-left: 3px solid var(--amber); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .small { font-size: 10px; }
+  .best { outline: 2px solid var(--green); outline-offset: -2px; border-radius: 3px; padding: 1px 4px; }
+  .worst { outline: 2px solid var(--red); outline-offset: -2px; border-radius: 3px; padding: 1px 4px; }
+</style>
+</head>
+<body>
+
+<h1>Snapshot Comparison — Regime Construction</h1>
+<p class="subtitle">Date range: 2023-01-01 to 2026-01-30 &nbsp;|&nbsp; IV boundaries: 12/17 &nbsp;|&nbsp; 4 unique snapshots: 3:29 T-1, 3:30 T-1, 9:15 T0, 9:16 T0 &nbsp;|&nbsp; ~750 trading days</p>
+
+<!-- ============================================================ -->
+<!-- SECTION 0: HEADLINE — ALL 4 ARE DIFFERENT -->
+<!-- ============================================================ -->
+
+<div class="card verdict-card">
+  <h2 style="border:none; margin:0; color:var(--green);">
+    <span class="section-num" style="background:rgba(0,230,118,0.2); color:var(--green);">✓</span>
+    All 4 Snapshots Produce Different Regime Classifications
+  </h2>
+  <div style="margin-top:12px;">
+    <p class="dim small" style="margin-bottom:8px;">Each snapshot uses a different IV reading. T-1 snapshots use yesterday's value directly; T0 morning snapshots use today's morning IV via shift(-1) then shift(1) netting to the raw value.</p>
+    <table>
+      <tr>
+        <th>Snapshot</th>
+        <th>What iv_lag[T] equals</th>
+        <th>Days</th>
+        <th>L1 / L2 / L3</th>
+        <th>AL% Spread</th>
+        <th>Self-Trans</th>
+        <th>Avg Streak</th>
+      </tr>
+      <tr>
+        <td>3:29 T-1 <span class="dim">(1529)</span></td>
+        <td class="dim">IV at 3:29 PM yesterday</td>
+        <td>747</td>
+        <td>332 / 334 / 81</td>
+        <td>6.4%</td>
+        <td>71.0%</td>
+        <td>3.4d</td>
+      </tr>
+      <tr>
+        <td class="bold">3:30 T-1 <span class="dim">(1530)</span></td>
+        <td class="dim">IV at 3:30 PM yesterday (official close)</td>
+        <td>747</td>
+        <td>335 / 330 / 82</td>
+        <td>6.3%</td>
+        <td>69.8%</td>
+        <td>3.3d</td>
+      </tr>
+      <tr class="highlight-row">
+        <td>9:15 T0 <span class="dim">(0915)</span></td>
+        <td class="g">IV at 9:15 AM today (market open)</td>
+        <td class="bold">750</td>
+        <td class="bold">236 / 362 / 152</td>
+        <td class="g bold">9.0%</td>
+        <td class="r">65.2%</td>
+        <td class="r">2.9d</td>
+      </tr>
+      <tr class="highlight-row">
+        <td>9:16 T0 <span class="dim">(0916)</span></td>
+        <td class="g">IV at 9:16 AM today</td>
+        <td class="bold">750</td>
+        <td class="bold">245 / 371 / 134</td>
+        <td class="g bold">9.9%</td>
+        <td>68.4%</td>
+        <td>3.2d</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="callout callout-critical" style="margin-top:16px;">
+    <strong>Morning IV is dramatically more volatile than close IV.</strong> At 9:15 AM, only 236 days (31.5%) are in L1 (IV &lt; 12) vs 335 days (44.8%) at 3:30 PM. Meanwhile L3 (IV ≥ 17) captures 152 days at 9:15 (20.3%) vs only 82 days at 3:30 (11.0%). <strong>Morning IV runs ~2-5 points higher than close IV</strong>, pushing more days into L2/L3 territory. By 3:30, IV has mean-reverted down from the opening spike.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 1: LEVEL DISTRIBUTION COMPARISON -->
+<!-- ============================================================ -->
+
+<div class="card">
+  <h2 style="color:var(--cyan);">
+    <span class="section-num">1</span>
+    Level Distribution: How IV Levels Shift Across Snapshots
+  </h2>
+
+  <table>
+    <tr>
+      <th>Level</th>
+      <th>Rule</th>
+      <th>3:29 T-1</th>
+      <th>3:30 T-1</th>
+      <th>9:15 T0</th>
+      <th>9:16 T0</th>
+      <th>Max Swing</th>
+    </tr>
+    <tr>
+      <td class="g">L1 (IV &lt; 12)</td>
+      <td class="dim">Low vol, calm</td>
+      <td>332 (44.4%)</td>
+      <td>335 (44.8%)</td>
+      <td class="r bold">236 (31.5%)</td>
+      <td>245 (32.7%)</td>
+      <td class="r">99 days (13.3pp)</td>
+    </tr>
+    <tr>
+      <td class="c">L2 (IV 12-17)</td>
+      <td class="dim">Mid vol, directional</td>
+      <td>334 (44.7%)</td>
+      <td>330 (44.2%)</td>
+      <td class="g bold">362 (48.3%)</td>
+      <td class="g bold">371 (49.5%)</td>
+      <td class="a">41 days (5.3pp)</td>
+    </tr>
+    <tr>
+      <td class="a">L3 (IV ≥ 17)</td>
+      <td class="dim">High vol, crisis</td>
+      <td>81 (10.8%)</td>
+      <td>82 (11.0%)</td>
+      <td class="r bold">152 (20.3%)</td>
+      <td>134 (17.9%)</td>
+      <td class="r">71 days (9.5pp)</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-warning">
+    <strong>Morning snapshots nearly double L3.</strong> At 9:15 AM, 152 days (20.3%) are classified as high-vol L3 — but by 3:30 PM close, only 82 (11.0%). That's 70 days that START the day in "crisis mode" but by end-of-day are just moderate vol. This has massive implications: if you use morning IV for regime decisions, you'll be in defensive mode twice as often as you need to be.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: COMPLETE 8-STATE TABLE — ALL 4 SNAPSHOTS -->
+<!-- ============================================================ -->
+
+<div class="card">
+  <h2 style="color:var(--purple);">
+    <span class="section-num">2</span>
+    8-State Regime Table: All 4 Snapshots
+  </h2>
+
+  <h3>AL% — All-Lose Rate by State</h3>
+  <table>
+    <tr>
+      <th>State</th>
+      <th>3:29 T-1</th>
+      <th>3:30 T-1</th>
+      <th>9:15 T0</th>
+      <th>9:16 T0</th>
+      <th>Range</th>
+    </tr>
+    <tr>
+      <td class="state-safe">L1 Safe</td>
+      <td class="g">4.2%</td><td>4.8%</td><td>4.2%</td><td class="g bold">3.3%</td>
+      <td class="dim">1.5pp</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L1 Exposed</td>
+      <td>10.2%</td><td class="g">9.6%</td><td>9.3%</td><td class="r">9.8%</td>
+      <td class="dim">0.9pp</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L2 Safe</td>
+      <td>5.0%</td><td class="g bold">4.2%</td><td>5.9%</td><td class="r">6.7%</td>
+      <td class="a">2.5pp</td>
+    </tr>
+    <tr>
+      <td class="state-caution">L2 Caution-A</td>
+      <td class="r">11.8%</td><td>10.1%</td><td>11.5%</td><td class="g bold">8.1%</td>
+      <td class="a">3.7pp</td>
+    </tr>
+    <tr class="highlight-row">
+      <td class="state-caution">L2 Caution-B</td>
+      <td>13.4%</td><td class="r bold">14.5%</td><td class="g bold">6.3%</td><td class="g bold">6.1%</td>
+      <td class="r bold">8.4pp</td>
+    </tr>
+    <tr>
+      <td class="state-risky">L2 Risky</td>
+      <td>11.1%</td><td class="r">12.5%</td><td class="g">7.8%</td><td>11.1%</td>
+      <td class="a">4.7pp</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L3 Safe</td>
+      <td>10.0%</td><td class="g bold">7.3%</td><td>11.8%</td><td>10.4%</td>
+      <td class="a">4.5pp</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L3 Exposed</td>
+      <td>17.1%</td><td class="r bold">19.5%</td><td>19.7%</td><td class="r bold">22.4%</td>
+      <td class="a">5.3pp</td>
+    </tr>
+    <tr style="border-top: 2px solid var(--border);">
+      <td class="bold">Overall</td>
+      <td>9.1%</td><td>9.1%</td><td>9.1%</td><td>9.1%</td>
+      <td class="g bold">0.0pp</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>Overall AL% is identical (9.1%) across all snapshots</strong> — the strategy returns don't change, only the regime labels shift. But the <em>per-state</em> separation varies wildly. L2 Caution-B swings from 6.1% (9:16) to 14.5% (3:30) — an 8.4pp range. This state is the most fragile.
+  </div>
+
+  <h3>Sharpe Ratio by State</h3>
+  <table>
+    <tr>
+      <th>State</th>
+      <th>3:29 T-1</th>
+      <th>3:30 T-1</th>
+      <th>9:15 T0</th>
+      <th>9:16 T0</th>
+      <th>Range</th>
+    </tr>
+    <tr>
+      <td class="state-safe">L1 Safe</td>
+      <td>3.04</td><td>2.97</td><td class="g">4.16</td><td class="g bold">4.99</td>
+      <td class="a">2.02</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L1 Exposed</td>
+      <td>0.57</td><td>0.38</td><td>0.12</td><td class="g">0.93</td>
+      <td class="dim">0.81</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L2 Safe</td>
+      <td>6.14</td><td class="g bold">6.25</td><td>4.31</td><td>4.58</td>
+      <td class="a">1.94</td>
+    </tr>
+    <tr>
+      <td class="state-caution">L2 Caution-A</td>
+      <td class="r">1.05</td><td class="r">1.80</td><td>1.84</td><td class="g bold">3.51</td>
+      <td class="a">2.46</td>
+    </tr>
+    <tr class="highlight-row">
+      <td class="state-caution">L2 Caution-B</td>
+      <td class="r">0.12</td><td class="r">0.46</td><td class="g bold">3.31</td><td class="g">2.28</td>
+      <td class="r bold">3.19</td>
+    </tr>
+    <tr>
+      <td class="state-risky">L2 Risky</td>
+      <td>2.07</td><td>1.35</td><td class="g bold">3.52</td><td class="r">0.47</td>
+      <td class="r">3.05</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L3 Safe</td>
+      <td>3.37</td><td class="g bold">5.49</td><td>1.15</td><td class="r">0.85</td>
+      <td class="r bold">4.64</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L3 Exposed</td>
+      <td>1.27</td><td class="r bold">-0.21</td><td>0.38</td><td>0.16</td>
+      <td class="dim">1.48</td>
+    </tr>
+    <tr style="border-top: 2px solid var(--border);">
+      <td class="bold">Overall</td>
+      <td>2.23</td><td>2.23</td><td>2.25</td><td>2.25</td>
+      <td class="g bold">0.02</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-critical">
+    <strong>L3 Safe Sharpe collapses from 5.49 (3:30 close) to 0.85 (9:16 morning).</strong> When you classify using 3:30's close IV, L3 has only 82 days and L3 Safe is a gem — Sharpe 5.49. But at 9:16 AM, 134 days qualify for L3, diluting the state with moderate-vol days that just have high opening IV. The "Safe" label means less when the population is noisy.
+  </div>
+
+  <h3>Portfolio Average Return by State</h3>
+  <table>
+    <tr>
+      <th>State</th>
+      <th>3:29 T-1</th>
+      <th>3:30 T-1</th>
+      <th>9:15 T0</th>
+      <th>9:16 T0</th>
+    </tr>
+    <tr>
+      <td class="state-safe">L1 Safe</td>
+      <td>0.0513</td><td>0.0511</td><td class="g">0.0645</td><td class="g bold">0.0719</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L1 Exposed</td>
+      <td>0.0284</td><td>0.0261</td><td>0.0232</td><td class="g">0.0319</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L2 Safe</td>
+      <td>0.1041</td><td class="g bold">0.1057</td><td>0.0758</td><td>0.0810</td>
+    </tr>
+    <tr>
+      <td class="state-caution">L2 Caution-A</td>
+      <td>0.0359</td><td>0.0460</td><td>0.0462</td><td class="g bold">0.0697</td>
+    </tr>
+    <tr>
+      <td class="state-caution">L2 Caution-B</td>
+      <td class="r">0.0234</td><td>0.0281</td><td class="g bold">0.0651</td><td>0.0493</td>
+    </tr>
+    <tr>
+      <td class="state-risky">L2 Risky</td>
+      <td>0.0527</td><td>0.0420</td><td class="g bold">0.0619</td><td class="r">0.0276</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L3 Safe</td>
+      <td>0.0914</td><td class="g bold">0.1290</td><td>0.0425</td><td>0.0374</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L3 Exposed</td>
+      <td>0.0428</td><td class="r">0.0182</td><td>0.0283</td><td>0.0246</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: PK/IV THRESHOLDS -->
+<!-- ============================================================ -->
+
+<div class="card">
+  <h2 style="color:var(--cyan);">
+    <span class="section-num">3</span>
+    PK/IV Thresholds: The Regime Dividing Line
+  </h2>
+  <p class="dim small" style="margin-bottom:8px;">These are the median PK/IV values computed from each snapshot's filtered data. Lower thresholds mean the system needs less realized/implied divergence to classify as "Exposed".</p>
+
+  <table>
+    <tr>
+      <th>Level</th>
+      <th>3:29 T-1</th>
+      <th>3:30 T-1</th>
+      <th>9:15 T0</th>
+      <th>9:16 T0</th>
+      <th>Range</th>
+    </tr>
+    <tr>
+      <td class="g">L1</td>
+      <td>0.6329</td><td>0.6350</td><td class="r bold">0.5762</td><td>0.5844</td>
+      <td class="r bold">0.0588</td>
+    </tr>
+    <tr>
+      <td class="c">L2</td>
+      <td>0.6489</td><td>0.6493</td><td class="r bold">0.5868</td><td>0.6023</td>
+      <td class="a">0.0625</td>
+    </tr>
+    <tr>
+      <td class="a">L3</td>
+      <td>0.6685</td><td>0.6650</td><td class="r bold">0.6025</td><td>0.6120</td>
+      <td class="a">0.0660</td>
+    </tr>
+    <tr>
+      <td class="dim">L1 Autocorrelation</td>
+      <td>0.55</td><td>0.54</td><td>0.55</td><td class="g bold">0.59</td>
+      <td class="dim">0.05</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-warning">
+    <strong>Morning thresholds are ~0.06 lower than close thresholds.</strong> At 9:15 AM, PK/IV ratios run lower because the denominator (IV) is inflated by the opening spike. The PK (Parkinson vol from yesterday's OHLC) stays fixed while IV_5d rises → PK/IV drops → the median threshold drops. This means the morning regime system is <em>less discriminating</em> — the "Exposed" bar is lower, letting more marginal days through as "Safe".
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: STRATEGY METRICS — ALL 4 SNAPSHOTS -->
+<!-- ============================================================ -->
+
+<div class="card">
+  <h2 style="color:var(--pink);">
+    <span class="section-num">4</span>
+    Strategy Sharpe by State: DM / WC / Orion
+  </h2>
+
+  <table>
+    <tr>
+      <th>State</th>
+      <th colspan="4" style="text-align:center;">DM Sharpe</th>
+      <th colspan="4" style="text-align:center;">WC Sharpe</th>
+      <th colspan="4" style="text-align:center;">Orion Sharpe</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th><span class="dim">3:29</span></th><th><span class="dim">3:30</span></th><th><span class="dim">9:15</span></th><th><span class="dim">9:16</span></th>
+      <th><span class="dim">3:29</span></th><th><span class="dim">3:30</span></th><th><span class="dim">9:15</span></th><th><span class="dim">9:16</span></th>
+      <th><span class="dim">3:29</span></th><th><span class="dim">3:30</span></th><th><span class="dim">9:15</span></th><th><span class="dim">9:16</span></th>
+    </tr>
+    <tr>
+      <td class="state-safe">L1 Safe</td>
+      <td>1.92</td><td>1.66</td><td class="r">0.89</td><td class="g bold">2.84</td>
+      <td>2.63</td><td>2.73</td><td class="g bold">3.89</td><td>3.01</td>
+      <td>0.67</td><td>0.81</td><td class="g bold">3.12</td><td class="g bold">2.99</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L1 Exposed</td>
+      <td>0.53</td><td class="r">0.05</td><td>0.67</td><td>0.32</td>
+      <td>1.21</td><td>1.18</td><td class="r">0.26</td><td>1.41</td>
+      <td class="r">-0.15</td><td class="r">0.02</td><td class="r">-0.64</td><td>0.15</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L2 Safe</td>
+      <td>2.07</td><td class="g bold">2.39</td><td>1.12</td><td>1.03</td>
+      <td class="g bold">5.43</td><td class="g bold">5.56</td><td>2.45</td><td>3.30</td>
+      <td>3.68</td><td>3.38</td><td>3.63</td><td class="g bold">3.83</td>
+    </tr>
+    <tr>
+      <td class="state-caution">L2 Caution-A</td>
+      <td>0.90</td><td>2.16</td><td class="r">-0.20</td><td class="g bold">2.76</td>
+      <td>3.37</td><td>3.34</td><td class="g bold">4.44</td><td>2.98</td>
+      <td class="r">-1.38</td><td class="r">-1.48</td><td>0.58</td><td>1.15</td>
+    </tr>
+    <tr class="highlight-row">
+      <td class="state-caution">L2 Caution-B</td>
+      <td class="r bold">-2.76</td><td class="r bold">-2.41</td><td>0.71</td><td class="r">-0.22</td>
+      <td class="r">-1.27</td><td class="r">-1.41</td><td class="g bold">3.77</td><td class="g bold">3.36</td>
+      <td class="g bold">4.06</td><td class="g bold">4.35</td><td>1.95</td><td>1.46</td>
+    </tr>
+    <tr>
+      <td class="state-risky">L2 Risky</td>
+      <td>1.80</td><td>1.39</td><td class="g bold">2.19</td><td class="r">-0.05</td>
+      <td class="r">-0.45</td><td class="r">-1.33</td><td class="r">-0.63</td><td class="r">-0.43</td>
+      <td>1.93</td><td>1.76</td><td class="g bold">3.38</td><td>0.97</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L3 Safe</td>
+      <td class="g bold">4.48</td><td class="g bold">4.48</td><td>2.63</td><td>2.49</td>
+      <td>1.32</td><td class="g bold">3.38</td><td>0.38</td><td>0.32</td>
+      <td class="r">-0.30</td><td class="g bold">2.44</td><td class="r">-1.16</td><td class="r">-1.29</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L3 Exposed</td>
+      <td>1.06</td><td>1.14</td><td>2.43</td><td>1.53</td>
+      <td>1.29</td><td>1.21</td><td>0.34</td><td class="r">-0.28</td>
+      <td>0.28</td><td class="r bold">-1.90</td><td class="r bold">-1.97</td><td class="r">-1.12</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-critical">
+    <strong>Critical findings across strategies:</strong><br>
+    &bull; <strong>L2 Caution-B is a completely different state</strong> depending on snapshot: DM Sharpe is -2.76 (3:29) vs +0.71 (9:15). WC Sharpe is -1.41 (3:30) vs +3.77 (9:15). The morning IV reclassification shuffles the population so much that the state's character inverts.<br>
+    &bull; <strong>Orion dies in L3</strong> at morning snapshots: L3 Safe Orion Sharpe is 2.44 (3:30) but -1.16 (9:15) and -1.29 (9:16). The extra 70+ days in morning L3 bring Orion-hostile conditions.<br>
+    &bull; <strong>DM is consistently strong in L3 Safe</strong> across all snapshots (4.48, 4.48, 2.63, 2.49) — the most stable signal in the table.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: VRP COMPARISON -->
+<!-- ============================================================ -->
+
+<div class="card">
+  <h2 style="color:var(--blue);">
+    <span class="section-num">5</span>
+    VRP by State: Volatility Risk Premium
+  </h2>
+
+  <table>
+    <tr>
+      <th>State</th>
+      <th>3:29 T-1</th>
+      <th>3:30 T-1</th>
+      <th>9:15 T0</th>
+      <th>9:16 T0</th>
+      <th>Rank Stable?</th>
+    </tr>
+    <tr>
+      <td class="state-safe">L1 Safe</td>
+      <td>2.95</td><td>2.93</td><td>2.19</td><td>2.64</td>
+      <td class="g">✓</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L1 Exposed</td>
+      <td>1.76</td><td>1.76</td><td>1.28</td><td>1.27</td>
+      <td class="g">✓ Always lowest</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L2 Safe</td>
+      <td>3.52</td><td>3.33</td><td>3.45</td><td>3.77</td>
+      <td class="g">✓</td>
+    </tr>
+    <tr>
+      <td class="state-caution">L2 Caution-A</td>
+      <td>4.45</td><td class="g bold">4.62</td><td>3.08</td><td>3.27</td>
+      <td class="a">Δ</td>
+    </tr>
+    <tr>
+      <td class="state-caution">L2 Caution-B</td>
+      <td>3.23</td><td>3.51</td><td class="g bold">3.96</td><td>3.21</td>
+      <td class="a">Δ</td>
+    </tr>
+    <tr>
+      <td class="state-risky">L2 Risky</td>
+      <td>2.62</td><td>2.61</td><td>2.53</td><td>2.37</td>
+      <td class="g">✓</td>
+    </tr>
+    <tr>
+      <td class="state-safe">L3 Safe</td>
+      <td class="g bold">4.96</td><td class="g bold">4.76</td><td class="g bold">4.98</td><td class="g bold">5.09</td>
+      <td class="g bold">✓ Always highest</td>
+    </tr>
+    <tr>
+      <td class="state-exposed">L3 Exposed</td>
+      <td>3.49</td><td>3.49</td><td>4.21</td><td>4.09</td>
+      <td class="g">✓</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-success">
+    <strong>L3 Safe always has the highest VRP (4.76-5.09) and L1 Exposed always has the lowest (1.27-1.76).</strong> The top and bottom VRP rankings are invariant across all 4 snapshots. L2 Caution-A and L2 Caution-B swap middle ranks — they're both in the 3.0-4.6 band — but the extremes are locked. VRP is the most snapshot-robust signal.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: QUINTILE ANALYSIS -->
+<!-- ============================================================ -->
+
+<div class="card">
+  <h2 style="color:var(--green);">
+    <span class="section-num">6</span>
+    PK/IV Quintile Stability: Close vs Morning
+  </h2>
+
+  <div class="grid-2">
+    <div>
+      <h3>L1 Quintiles — AL% Gradient</h3>
+      <table>
+        <tr><th>Q</th><th>3:29</th><th>3:30</th><th>9:15</th><th>9:16</th></tr>
+        <tr><td class="g">Q1</td><td>1.5%</td><td>1.5%</td><td>2.1%</td><td>2.0%</td></tr>
+        <tr><td class="g">Q2</td><td>3.0%</td><td>3.0%</td><td>4.3%</td><td>4.1%</td></tr>
+        <tr><td class="a">Q3</td><td>9.1%</td><td>9.0%</td><td>6.4%</td><td>10.2%</td></tr>
+        <tr><td class="r">Q4</td><td>9.1%</td><td>9.0%</td><td>12.8%</td><td>4.1%</td></tr>
+        <tr><td class="r">Q5</td><td>13.4%</td><td>13.4%</td><td>8.5%</td><td>12.2%</td></tr>
+      </table>
+      <div class="callout callout-success" style="margin-top:8px;">
+        <strong>Close snapshots (3:29, 3:30) have a clean monotonic Q1→Q5 gradient.</strong> Morning snapshots break the pattern at Q3-Q5 because the PK/IV ranges shift with the inflated IV denominator. <strong>Close IV produces better-behaved quintiles.</strong>
+      </div>
+    </div>
+    <div>
+      <h3>L3 Quintiles — AL% Gradient</h3>
+      <table>
+        <tr><th>Q</th><th>3:29</th><th>3:30</th><th>9:15</th><th>9:16</th></tr>
+        <tr><td class="g">Q1</td><td>11.8%</td><td class="r">17.6%</td><td>19.4%</td><td>14.8%</td></tr>
+        <tr><td>Q2</td><td>6.2%</td><td class="g bold">0.0%</td><td>3.3%</td><td>7.4%</td></tr>
+        <tr><td>Q3</td><td class="r">18.8%</td><td>12.5%</td><td>16.7%</td><td>15.4%</td></tr>
+        <tr><td class="r">Q4</td><td class="r">18.8%</td><td class="r bold">25.0%</td><td class="r">23.3%</td><td>18.5%</td></tr>
+        <tr><td>Q5</td><td>12.5%</td><td>11.8%</td><td>16.1%</td><td class="r bold">25.9%</td></tr>
+      </table>
+      <div class="callout callout-warning" style="margin-top:8px;">
+        <strong>L3 quintiles are noisy across all snapshots</strong> — only ~80-150 days split into 5 buckets of ~16-30 each. No snapshot produces a clean gradient. This is a sample size issue, not a signal issue. The binary Safe/Exposed split is more reliable than quintiles in L3.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: TESTED AND FAILED -->
+<!-- ============================================================ -->
+
+<div class="card">
+  <h2 style="color:var(--text-dim);">
+    <span class="section-num">7</span>
+    Tested-and-Failed Approaches: Stability Across All Snapshots
+  </h2>
+
+  <h3>L1: "Does IV direction work?" → NO in all snapshots</h3>
+  <table>
+    <tr><th>Approach</th><th>3:29</th><th>3:30</th><th>9:15</th><th>9:16</th><th>Stable?</th></tr>
+    <tr>
+      <td>IV direction (avg_chg_5d)</td>
+      <td class="dim">-1.2pp</td><td class="dim">-1.2pp</td><td class="dim">+1.7pp</td><td class="dim">+3.3pp</td>
+      <td><span class="tag tag-different">Δ sign flips</span></td>
+    </tr>
+    <tr>
+      <td>VRP alone</td>
+      <td class="dim">+0.0pp</td><td class="dim">+0.0pp</td><td class="dim">-1.7pp</td><td class="dim">-3.2pp</td>
+      <td><span class="tag tag-different">Δ direction</span></td>
+    </tr>
+    <tr>
+      <td>1d IV change</td>
+      <td class="dim">+3.7pp</td><td class="dim">+3.6pp</td><td class="dim">+1.8pp</td><td class="dim">+0.0pp</td>
+      <td><span class="tag tag-different">Weaker mornings</span></td>
+    </tr>
+  </table>
+
+  <h3>L2: "PK/IV alone vs with IV direction" → IV dir always wins</h3>
+  <table>
+    <tr><th>Approach</th><th>3:29</th><th>3:30</th><th>9:15</th><th>9:16</th><th>Stable?</th></tr>
+    <tr>
+      <td>PK/IV alone on L2</td>
+      <td class="dim">3.0pp vs 6.1pp</td><td class="dim">3.0pp vs 8.3pp</td><td class="dim">3.3pp vs 1.9pp</td><td class="dim">3.3pp vs 4.4pp</td>
+      <td><span class="tag tag-critical">9:15 reversal</span></td>
+    </tr>
+    <tr>
+      <td>L2 rules on L1</td>
+      <td class="dim">4.2%→6.1% worse</td><td class="dim">4.8%→6.0% worse</td><td class="dim">4.2%→4.8% worse</td><td class="dim">3.3%→2.1% <span class="g">better!</span></td>
+      <td><span class="tag tag-critical">9:16 breaks</span></td>
+    </tr>
+  </table>
+
+  <h3>L3: "IV direction at L3" → Consistently decent but can't split</h3>
+  <table>
+    <tr><th>Approach</th><th>3:29</th><th>3:30</th><th>9:15</th><th>9:16</th><th>Stable?</th></tr>
+    <tr>
+      <td>IV direction at L3</td>
+      <td class="dim">+7.7pp, 90% rising</td><td class="dim">+7.3pp, 87% rising</td><td class="dim">+8.3pp, 81% rising</td><td class="dim">+9.0pp, 81% rising</td>
+      <td><span class="tag tag-identical">✓ Consistent</span></td>
+    </tr>
+  </table>
+
+  <div class="callout callout-warning" style="margin-top:12px;">
+    <strong>Morning snapshots weaken the "tested and failed" conclusions.</strong> At 9:15, PK/IV alone on L2 actually outperforms PK/IV + IV direction (3.3pp vs 1.9pp — the addition of IV direction HURTS). At 9:16, adding IV direction to L1 actually improves it (3.3%→2.1%). These reversals happen because morning IV is noisier — the signal-to-noise ratio of IV direction collapses when the IV reading itself is unstable.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 8: DEEP INSIGHTS -->
+<!-- ============================================================ -->
+
+<div class="card insight-card">
+  <h2 style="border:none; margin:0; color:var(--purple);">
+    <span class="section-num" style="background:rgba(192,132,252,0.2);">★</span>
+    Deep Insights & Practitioner Takeaways
+  </h2>
+
+  <div style="margin-top:16px;">
+
+    <div class="callout callout-critical">
+      <strong>1. Morning IV inflates L3 by ~85% — you'd be defensive twice as often.</strong><br>
+      At 3:30 PM close, 82 days (11.0%) are L3. At 9:15 AM, 152 days (20.3%) are L3. Morning VIX/IV is structurally elevated due to overnight risk premium and opening auction volatility. If you classify regimes using morning IV, you'll treat 70 extra days as "crisis mode" when they're actually moderate-vol days that settle down by close. <strong>This is a 9.3pp false-alarm rate on L3.</strong>
+    </div>
+
+    <div class="callout callout-warning">
+      <strong>2. Close snapshots produce cleaner quintile gradients.</strong><br>
+      At 3:29/3:30, L1 quintiles show a clean monotonic AL% pattern: Q1 (1.5%) → Q5 (13.4%). At 9:15/9:16, the pattern breaks — Q3/Q4/Q5 jump around. This is because morning PK/IV ratios are computed with inflated IV denominators, compressing the range and reducing signal quality. <strong>PK/IV ratio has higher discriminating power when computed from close IV.</strong>
+    </div>
+
+    <div class="callout callout-info">
+      <strong>3. L2 Caution-B changes character entirely between close and morning.</strong><br>
+      &bull; Close (3:30): AL% = 14.5%, Sharpe = 0.46, DM Sharpe = -2.41, WC Sharpe = -1.41 → <span class="r bold">genuinely dangerous state</span><br>
+      &bull; Morning (9:15): AL% = 6.3%, Sharpe = 3.31, DM Sharpe = 0.71, WC Sharpe = 3.77 → <span class="g bold">looks like a safe state!</span><br>
+      The population of days classified as "L2 + low PK/IV + rising IV" is completely different depending on when you measure IV. The close-based Caution-B captures true risk events. The morning-based Caution-B captures days where IV is temporarily elevated but PK/IV is still low — those days have great outcomes. <strong>The close interpretation is the real one.</strong>
+    </div>
+
+    <div class="callout callout-success">
+      <strong>4. The Safe/Exposed AL% gap is robust across all 4 snapshots.</strong><br>
+      Despite all the noise, the core insight holds everywhere:<br>
+      &bull; <strong>L1:</strong> Safe 3.3-4.8% vs Exposed 9.3-10.2% — 5-6pp gap always present<br>
+      &bull; <strong>L2:</strong> Safe 4.2-6.7% vs Risky 7.8-12.5% — 3-6pp gap always present<br>
+      &bull; <strong>L3:</strong> Safe 7.3-11.8% vs Exposed 17.1-22.4% — 8-12pp gap always present<br>
+      PK/IV separates risk at every snapshot. The <em>magnitude</em> changes, but the <em>direction</em> never flips.
+    </div>
+
+    <div class="callout callout-warning">
+      <strong>5. Orion collapses in L3 at morning snapshots.</strong><br>
+      L3 Safe Orion Sharpe: +2.44 (3:30) → -1.16 (9:15) → -1.29 (9:16). L3 Exposed Orion Sharpe: -1.90 (3:30) → -1.97 (9:15). Orion's directional bets get destroyed on days with elevated morning IV that aren't truly high-vol days. <strong>If using morning snapshots, avoid Orion in L3 entirely.</strong> DM is the only strategy with consistent L3 Safe performance (4.48, 4.48, 2.63, 2.49 across all snapshots).
+    </div>
+
+    <div class="callout callout-info">
+      <strong>6. VRP rank ordering is the most snapshot-invariant signal.</strong><br>
+      L3 Safe always has the highest VRP (4.76-5.09) and L1 Exposed always has the lowest (1.27-1.76) across ALL 4 snapshots. The top and bottom never flip. When your regime says "Safe" and VRP is high, trade with maximum conviction — this is the one signal that doesn't care when you measured IV.
+    </div>
+
+    <div class="callout callout-critical">
+      <strong>7. Morning snapshots break the L2 tested-and-failed conclusions.</strong><br>
+      At 3:30, adding IV direction to L2 adds 5.3pp of AL% separation. At 9:15, it actually HURTS by -1.4pp. At 9:16, adding IV direction to L1 improves performance (which contradicts the close-based finding). <strong>The regime construction methodology was designed around close IV and should only be used with close IV.</strong> Morning IV introduces enough noise that some of the carefully validated relationships reverse.
+    </div>
+
+    <div class="callout callout-success">
+      <strong>8. Recommendation: Use 3:30 T-1 as the canonical snapshot.</strong><br>
+      &bull; It uses the official close — settlement, margin, institutional flow all anchor to this<br>
+      &bull; Produces the cleanest quintile gradients (monotonic AL% in L1)<br>
+      &bull; L3 population is compact (82 days) and discriminating (Safe Sharpe 5.49 vs Exposed -0.21)<br>
+      &bull; Tested-and-failed conclusions are internally consistent<br>
+      &bull; All strategies behave as expected (WC strong in L2 Safe, DM strong in L3 Safe)<br>
+      &bull; Morning snapshots (9:15, 9:16) are useful for <em>intraday regime awareness</em> ("is IV elevated this morning?") but NOT for regime classification and strategy selection
+    </div>
+
+    <div class="callout callout-info">
+      <strong>9. When could morning snapshots ADD value?</strong><br>
+      &bull; <strong>Early warning:</strong> If 9:15 says L3 but 3:30 T-1 said L2, today might be transitioning to higher vol — tighten stops<br>
+      &bull; <strong>Mean reversion signal:</strong> If 9:15 IV is 5+ points above yesterday's 3:30 close IV, history says it'll come down — this is a VRP opportunity<br>
+      &bull; <strong>Opening trade timing:</strong> Use the morning snapshot to decide WHEN to enter, but use the close snapshot to decide WHAT to trade and HOW much size<br>
+      These are separate use cases from regime classification — don't mix them.
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 9: FINAL VERDICT MATRIX -->
+<!-- ============================================================ -->
+
+<div class="card">
+  <h2 style="color:var(--cyan);">
+    <span class="section-num">9</span>
+    Final Verdict Matrix
+  </h2>
+
+  <table>
+    <tr>
+      <th style="width:220px;">Aspect</th>
+      <th>3:29 T-1</th>
+      <th>3:30 T-1</th>
+      <th>9:15 T0</th>
+      <th>9:16 T0</th>
+    </tr>
+    <tr>
+      <td>Total days</td>
+      <td>747</td><td>747</td><td>750</td><td>750</td>
+    </tr>
+    <tr>
+      <td>L1/L2/L3 split</td>
+      <td class="dim">332/334/81</td>
+      <td class="dim">335/330/82</td>
+      <td class="a">236/362/152</td>
+      <td class="a">245/371/134</td>
+    </tr>
+    <tr>
+      <td>L3 population</td>
+      <td>81 (10.8%)</td>
+      <td>82 (11.0%)</td>
+      <td class="r bold">152 (20.3%)</td>
+      <td class="r">134 (17.9%)</td>
+    </tr>
+    <tr>
+      <td>L1 quintile monotonic?</td>
+      <td class="g">✓ Clean</td>
+      <td class="g">✓ Clean</td>
+      <td class="r">✗ Breaks Q4-Q5</td>
+      <td class="r">✗ Breaks Q3-Q4</td>
+    </tr>
+    <tr>
+      <td>Safe/Exposed gap</td>
+      <td class="g">✓ 5-10pp</td>
+      <td class="g bold">✓ 5-12pp</td>
+      <td class="g">✓ 5-10pp</td>
+      <td class="g">✓ 6-13pp</td>
+    </tr>
+    <tr>
+      <td>L3 Safe Sharpe</td>
+      <td>3.37</td>
+      <td class="g bold">5.49</td>
+      <td class="r">1.15</td>
+      <td class="r">0.85</td>
+    </tr>
+    <tr>
+      <td>VRP rank stable?</td>
+      <td class="g">✓</td>
+      <td class="g">✓</td>
+      <td class="g">✓</td>
+      <td class="g">✓</td>
+    </tr>
+    <tr>
+      <td>Tested-failed consistent?</td>
+      <td class="g">✓</td>
+      <td class="g">✓</td>
+      <td class="r">✗ L2 reversal</td>
+      <td class="r">✗ L1 reversal</td>
+    </tr>
+    <tr>
+      <td>Orion in L3</td>
+      <td class="dim">Marginal</td>
+      <td class="g">Strong (2.44)</td>
+      <td class="r bold">Negative (-1.16)</td>
+      <td class="r bold">Negative (-1.29)</td>
+    </tr>
+    <tr>
+      <td>Self-transition</td>
+      <td>71.0%</td>
+      <td>69.8%</td>
+      <td class="r">65.2%</td>
+      <td>68.4%</td>
+    </tr>
+    <tr style="border-top: 2px solid var(--border);">
+      <td class="bold">Verdict</td>
+      <td class="dim">Close backup</td>
+      <td><span class="tag tag-verdict">★ PRIMARY</span></td>
+      <td class="dim">Intraday awareness</td>
+      <td class="dim">Intraday awareness</td>
+    </tr>
+  </table>
+</div>
+
+<div style="text-align:center; padding:32px 0; color:var(--text-dim); font-size:10px;">
+  Generated from live API data &nbsp;|&nbsp; 4 snapshots × 8 regime states × 3 strategies &nbsp;|&nbsp; ~750 trading days analyzed
+</div>
+
+</body>
+</html>

@@ -148,9 +148,13 @@ def _compute_regime_features(rv_df: pd.DataFrame, snapshot: str = "1530") -> pd.
     df["PK_today"] = _compute_parkinson_vol(df["high"], df["low"])
 
     # Use snapshot-specific IV
+    # Morning snapshots (0915/0916) are T0: shift back by 1 so row T-1 uses T's morning IV
     iv_col = f"IV_7d_{snapshot}"
     if iv_col in df.columns:
-        df["_iv"] = df[iv_col]
+        if snapshot in ("0915", "0916"):
+            df["_iv"] = df[iv_col].shift(-1)
+        else:
+            df["_iv"] = df[iv_col]
     else:
         df["_iv"] = df["IV_7d"]
 
@@ -252,7 +256,12 @@ def _merge(strategy: str, start: str | None = None, end: str | None = None,
     if snapshot in VALID_SNAPSHOTS:
         iv_col = f"IV_7d_{snapshot}"
         if iv_col in merged.columns:
-            merged["IV_7d"] = merged[iv_col]
+            # Morning snapshots (0915/0916) represent T0 (today's open),
+            # so shift IV back by 1 row: row T-1 uses T's morning IV.
+            if snapshot in ("0915", "0916"):
+                merged["IV_7d"] = merged[iv_col].shift(-1)
+            else:
+                merged["IV_7d"] = merged[iv_col]
             merged["IV_change_1d"] = merged["IV_7d"] - merged["IV_7d"].shift(1)
             merged["VRP_today"] = merged["IV_7d"] - merged["RV_today"]
 
@@ -833,10 +842,12 @@ def _regime_merge_all_strategies(start: str | None = None, end: str | None = Non
     pnl_cols = [f"pnl_{s}" for s in ["dm", "wc", "orion"] if f"pnl_{s}" in result.columns]
     if pnl_cols:
         result["pnl_combined"] = result[pnl_cols].mean(axis=1)
-        # All-lose: all 3 strategies negative on the same day
-        result["all_lose"] = (result[pnl_cols] < 0).all(axis=1)
+        # All-lose: all 3 strategies negative on the same day (NaN-aware: only count days where all have data)
+        _pnl = result[pnl_cols]
+        _has_all = _pnl.notna().all(axis=1)
+        result["all_lose"] = _has_all & (_pnl < 0).all(axis=1)
         # All-win: all 3 strategies positive on the same day
-        result["all_win"] = (result[pnl_cols] > 0).all(axis=1)
+        result["all_win"] = _has_all & (_pnl > 0).all(axis=1)
 
     # Merge DTE from trading_dates
     result = result.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
@@ -1275,7 +1286,11 @@ def get_data_exploration(
     if feat_info["source"] == "rv" and snapshot in VALID_SNAPSHOTS:
         iv_col = f"IV_7d_{snapshot}"
         if iv_col in rv.columns:
-            rv["IV_7d"] = rv[iv_col]
+            # Morning snapshots (0915/0916) are T0: shift back by 1
+            if snapshot in ("0915", "0916"):
+                rv["IV_7d"] = rv[iv_col].shift(-1)
+            else:
+                rv["IV_7d"] = rv[iv_col]
             rv["IV_change_1d"] = rv["IV_7d"] - rv["IV_7d"].shift(1)
             rv["VRP_today"] = rv["IV_7d"] - rv["RV_today"]
         open_snap, close_snap = INTRADAY_PAIRS[snapshot]
@@ -2289,13 +2304,13 @@ def get_regime_construction(
         streaks = []
         current_streak = 1
         for i in range(1, len(level_ser)):
-            if level_ser.iloc[i] == level_ser.iloc[i - 1] and level_ser.iloc[i] is not None:
+            if pd.notna(level_ser.iloc[i]) and level_ser.iloc[i] == level_ser.iloc[i - 1]:
                 current_streak += 1
             else:
-                if level_ser.iloc[i - 1] is not None:
+                if pd.notna(level_ser.iloc[i - 1]):
                     streaks.append(current_streak)
                 current_streak = 1
-        if level_ser.iloc[-1] is not None:
+        if pd.notna(level_ser.iloc[-1]):
             streaks.append(current_streak)
         avg_streak = float(np.mean(streaks)) if streaks else 0
 
@@ -2502,6 +2517,7 @@ def get_regime_construction(
         "pk_iv_quintiles": l3_quintiles,
         "final_states": l3_final_named,
         "threshold": pkiv_l3,
+        "threshold_ac": l3_th_ac,
         "strategy_profiles": l3_strat_profiles,
     }
 
@@ -2753,6 +2769,167 @@ def get_regime_construction(
         "overall": overall,
         "dte_breakdown": dte_breakdown,
         "vrp_by_state": vrp_by_state,
+    }
+
+
+@app.get("/api/regime/snapshot-comparison")
+def get_snapshot_comparison(
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+):
+    """Compare regime classification across all 4 snapshots."""
+    snapshots = ["1530", "1529", "0915", "0916"]
+    snapshot_labels = {
+        "1530": "3:30 PM T-1",
+        "1529": "3:29 PM T-1",
+        "0915": "9:15 AM T0",
+        "0916": "9:16 AM T0",
+    }
+
+    all_states = [
+        "L1 Safe", "L1 Exposed",
+        "L2 Safe", "L2 Caution-A", "L2 Caution-B", "L2 Risky",
+        "L3 Safe", "L3 Exposed",
+    ]
+
+    results = {}
+    for snap in snapshots:
+        try:
+            merged = _regime_merge_all_strategies(start_date, end_date, snap)
+            merged = merged.dropna(subset=["pnl_combined", "iv_lag"])
+
+            from collections import Counter
+
+            iv_col = "iv_lag"
+            l1_mask = merged[iv_col] < IV_L1_UPPER
+            l2_mask = (merged[iv_col] >= IV_L1_UPPER) & (merged[iv_col] < IV_L2_UPPER)
+            l3_mask = merged[iv_col] >= IV_L2_UPPER
+
+            level_dist = {
+                "L1": {"days": int(l1_mask.sum()), "pct": round(float(l1_mask.mean() * 100), 1)},
+                "L2": {"days": int(l2_mask.sum()), "pct": round(float(l2_mask.mean() * 100), 1)},
+                "L3": {"days": int(l3_mask.sum()), "pct": round(float(l3_mask.mean() * 100), 1)},
+            }
+
+            state_metrics = []
+            for state in all_states:
+                sub = merged[merged["regime_state"] == state]
+                n = len(sub)
+                if n == 0:
+                    state_metrics.append({"state": state, "days": 0, "pct": 0, "al_pct": None, "sharpe": None, "port_avg": None,
+                                         "dm_avg": None, "dm_sharpe": None, "wc_avg": None, "wc_sharpe": None, "orion_avg": None, "orion_sharpe": None})
+                    continue
+                total = len(merged)
+                al = float(sub["all_lose"].sum() / n * 100) if "all_lose" in sub.columns else None
+
+                pnl = sub["pnl_combined"].dropna()
+                m = float(pnl.mean()) if len(pnl) > 0 else None
+                s = float(pnl.std()) if len(pnl) > 1 else None
+                sh = round((m * 252 - 5.5) / (s * (252 ** 0.5)), 2) if m is not None and s and s > 0 else None
+
+                row = {
+                    "state": state,
+                    "days": n,
+                    "pct": round(n / total * 100, 1),
+                    "al_pct": round(al, 1) if al is not None else None,
+                    "sharpe": sh,
+                    "port_avg": round(m, 4) if m is not None else None,
+                }
+
+                for skey in ["dm", "wc", "orion"]:
+                    col = f"pnl_{skey}"
+                    if col in sub.columns:
+                        sp = sub[col].dropna()
+                        sm = float(sp.mean()) if len(sp) > 0 else None
+                        ss = float(sp.std()) if len(sp) > 1 else None
+                        shr = round((sm * 252 - 5.5) / (ss * (252 ** 0.5)), 2) if sm is not None and ss and ss > 0 else None
+                        row[f"{skey}_avg"] = round(sm, 4) if sm is not None else None
+                        row[f"{skey}_sharpe"] = shr
+                    else:
+                        row[f"{skey}_avg"] = None
+                        row[f"{skey}_sharpe"] = None
+
+                state_metrics.append(row)
+
+            # VRP by state
+            vrp_by_state = {}
+            if "VRP_today" in merged.columns:
+                for state in all_states:
+                    sub = merged[merged["regime_state"] == state]
+                    v = sub["VRP_today"].dropna()
+                    vrp_by_state[state] = round(float(v.mean()), 2) if len(v) > 0 else None
+
+            # PK/IV thresholds
+            pk_thresholds = {}
+            for lvl_name, mask in [("L1", l1_mask), ("L2", l2_mask), ("L3", l3_mask)]:
+                lvl_data = merged[mask]
+                if "PK_IV_ratio" in lvl_data.columns and len(lvl_data) > 0:
+                    pk_thresholds[lvl_name] = round(float(lvl_data["PK_IV_ratio"].median()), 4)
+
+            # Overall
+            pnl_all = merged["pnl_combined"].dropna()
+            m_all = float(pnl_all.mean()) if len(pnl_all) > 0 else None
+            s_all = float(pnl_all.std()) if len(pnl_all) > 1 else None
+            sh_all = round((m_all * 252 - 5.5) / (s_all * (252 ** 0.5)), 2) if m_all is not None and s_all and s_all > 0 else None
+            al_all = float(merged["all_lose"].sum() / len(merged) * 100) if "all_lose" in merged.columns else None
+
+            # IV stats
+            iv_mean = round(float(merged["iv_lag"].mean()), 2) if "iv_lag" in merged.columns else None
+            iv_std = round(float(merged["iv_lag"].std()), 2) if "iv_lag" in merged.columns else None
+
+            results[snap] = {
+                "label": snapshot_labels[snap],
+                "days": len(merged),
+                "level_distribution": level_dist,
+                "state_metrics": state_metrics,
+                "vrp_by_state": vrp_by_state,
+                "pk_iv_thresholds": pk_thresholds,
+                "overall": {
+                    "days": len(merged),
+                    "sharpe": sh_all,
+                    "al_pct": round(al_all, 1) if al_all is not None else None,
+                    "port_avg": round(m_all, 4) if m_all is not None else None,
+                },
+                "iv_stats": {"mean": iv_mean, "std": iv_std},
+            }
+        except Exception as e:
+            results[snap] = {"label": snapshot_labels[snap], "error": str(e)}
+
+    # Cross-snapshot agreement analysis
+    agreement = []
+    try:
+        dfs = {}
+        for snap in snapshots:
+            m = _regime_merge_all_strategies(start_date, end_date, snap)
+            m = m.dropna(subset=["pnl_combined", "iv_lag"])
+            dfs[snap] = m[["date", "regime_state"]].rename(columns={"regime_state": f"state_{snap}"})
+
+        combined = dfs["1530"]
+        for snap in ["1529", "0915", "0916"]:
+            combined = combined.merge(dfs[snap], on="date", how="inner")
+
+        # Agreement rates
+        all_agree = (combined["state_1530"] == combined["state_1529"]) & \
+                    (combined["state_1530"] == combined["state_0915"]) & \
+                    (combined["state_1530"] == combined["state_0916"])
+
+        close_agree = combined["state_1530"] == combined["state_1529"]
+        morning_agree = combined["state_0915"] == combined["state_0916"]
+        close_vs_morning = combined["state_1530"] == combined["state_0915"]
+
+        agreement = {
+            "total_days": len(combined),
+            "all_four_agree_pct": round(float(all_agree.mean() * 100), 1),
+            "close_pair_agree_pct": round(float(close_agree.mean() * 100), 1),
+            "morning_pair_agree_pct": round(float(morning_agree.mean() * 100), 1),
+            "close_vs_morning_pct": round(float(close_vs_morning.mean() * 100), 1),
+        }
+    except Exception:
+        agreement = {}
+
+    return {
+        "snapshots": results,
+        "agreement": agreement,
     }
 
 
