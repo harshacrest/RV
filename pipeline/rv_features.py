@@ -14,9 +14,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-SPOT_PATH = Path(__file__).resolve().parent / "nifty_spot_daily.parquet"
-OUTPUT_PATH = Path(__file__).resolve().parent / "rv_daily.parquet"
-IV_FEATURES_DIR = Path(__file__).resolve().parent.parent / "Volatilities" / "Macro" / "data" / "features"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SPOT_PATH = PROJECT_ROOT / "features" / "nifty_spot_daily.parquet"
+OUTPUT_PATH = PROJECT_ROOT / "features" / "rv_daily.parquet"
+IV_FEATURES_DIR = PROJECT_ROOT.parent / "Volatilities" / "Macro" / "data" / "features"
 
 
 def load_spot_ohlc(path: Path) -> pd.DataFrame:

@@ -1,19 +1,23 @@
 import pandas as pd
+from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = PROJECT_ROOT / "features"
+
 # Load data
-rv = pd.read_parquet('rv_daily.parquet')
+rv = pd.read_parquet(DATA_DIR / 'rv_daily.parquet')
 rv['timestamp'] = pd.to_datetime(rv['timestamp']).dt.date
 
-dm = pd.read_excel('strategy_returns_DM_per_trade_both_max_100.xlsx', sheet_name='returns')
+dm = pd.read_excel(DATA_DIR / 'strategy_returns_DM_per_trade_both_max_100.xlsx', sheet_name='returns')
 dm['Date'] = pd.to_datetime(dm['Date']).dt.date
 
-wc = pd.read_excel('strategy_returns_90_0_both_itm.xlsx', sheet_name='returns')
+wc = pd.read_excel(DATA_DIR / 'strategy_returns_90_0_both_itm.xlsx', sheet_name='returns')
 wc['Date'] = pd.to_datetime(wc['Date']).dt.date
 
-orion = pd.read_excel('strategy_returns_orion_index_kd_60_40_sl10_max90_min20.xlsx', sheet_name='returns')
+orion = pd.read_excel(DATA_DIR / 'strategy_returns_orion_index_kd_60_40_sl10_max90_min20.xlsx', sheet_name='returns')
 orion['Date'] = pd.to_datetime(orion['Date']).dt.date
 
 # Merge all on date
@@ -173,6 +177,6 @@ for col, w in widths.items():
 ws.freeze_panes = 'B3'
 ws.auto_filter.ref = f'A2:{get_column_letter(n_cols)}{len(merged)+2}'
 
-out = 'daily_overview_all_strategies.xlsx'
+out = DATA_DIR / 'daily_overview_all_strategies.xlsx'
 wb.save(out)
 print(f'Saved: {out} | Rows: {len(merged)}, Columns: {len(headers)}')

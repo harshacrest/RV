@@ -17,21 +17,21 @@ PYTHON=/opt/homebrew/bin/python3
 
 # ── Step 1: Regenerate nifty_spot_daily.parquet ──
 echo "[1/5] Fetching & aggregating spot data..."
-$PYTHON fetch_data.py
+$PYTHON pipeline/fetch_data.py
 if [ $? -ne 0 ]; then echo "FAILED: fetch_data.py"; exit 1; fi
-echo "      ✓ nifty_spot_daily.parquet"
+echo "      ✓ features/nifty_spot_daily.parquet"
 echo ""
 
 # ── Step 2: Regenerate rv_daily.parquet ──
 echo "[2/5] Computing RV features..."
-$PYTHON rv_features.py
+$PYTHON pipeline/rv_features.py
 if [ $? -ne 0 ]; then echo "FAILED: rv_features.py"; exit 1; fi
-echo "      ✓ rv_daily.parquet"
+echo "      ✓ features/rv_daily.parquet"
 echo ""
 
 # ── Step 3: Regenerate daily_overview Excel ──
 echo "[3/5] Building daily overview Excel..."
-$PYTHON build_daily_overview.py
+$PYTHON pipeline/build_daily_overview.py
 if [ $? -ne 0 ]; then echo "FAILED: build_daily_overview.py"; exit 1; fi
 echo "      ✓ daily_overview_all_strategies.xlsx"
 echo ""

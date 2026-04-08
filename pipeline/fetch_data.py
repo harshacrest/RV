@@ -10,8 +10,9 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
-DATA_ROOT = Path(__file__).resolve().parent.parent / "DATA" / "NSE" / "NIFTY"
-OUTPUT_PATH = Path(__file__).resolve().parent / "nifty_spot_daily.parquet"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_ROOT = PROJECT_ROOT.parent / "DATA" / "NSE" / "NIFTY"
+OUTPUT_PATH = PROJECT_ROOT / "features" / "nifty_spot_daily.parquet"
 
 
 def load_tick_data() -> pd.DataFrame:

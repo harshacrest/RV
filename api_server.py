@@ -18,11 +18,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 BASE = Path(__file__).resolve().parent
 
+DATA_STRATEGIES = BASE.parent / "DATA" / "Strategies"
 STRATEGY_FILES = {
-    "dm": BASE / "strategy_returns_DM_per_trade_both_max_100.xlsx",
-    "wc": BASE / "strategy_returns_90_0_both_itm.xlsx",
-    "orion": BASE / "strategy_returns_orion_index_kd_60_40_sl10_max90_min20.xlsx",
-    "dmo": BASE / "strategy_returns_DMO.xlsx",
+    "dm": DATA_STRATEGIES / "DM" / "DM_merged.xlsx",
+    "wc": DATA_STRATEGIES / "WC" / "WC_merged.xlsx",
+    "orion": DATA_STRATEGIES / "Orion" / "Orion_merged.xlsx",
+    "dmo": BASE / "features" / "strategy_returns_DMO.xlsx",
 }
 
 FEATURES = ["RV_today", "IV_7d", "IV_change_1d", "VRP_today", "IV_intraday_change"]
@@ -77,7 +78,7 @@ TRADING_DATES_PATH = BASE.parent / "DATA" / "NSE" / "trading_dates.csv"
 
 
 def _load():
-    rv = pd.read_parquet(BASE / "rv_daily.parquet")
+    rv = pd.read_parquet(BASE / "features" / "rv_daily.parquet")
     rv["timestamp"] = pd.to_datetime(rv["timestamp"])
     rv["date"] = rv["timestamp"].dt.date
 
@@ -809,7 +810,7 @@ def get_rv_timeseries(start_date: str | None = None, end_date: str | None = None
 
 
 def _regime_merge(strategy: str | None, start: str | None = None, end: str | None = None,
-                   snapshot: str = "1530") -> pd.DataFrame:
+                   snapshot: str = "1530", dte: int | None = None) -> pd.DataFrame:
     """Merge RV data with regime features and optionally a strategy's returns."""
     rv = _compute_regime_features(RV_DATA, snapshot)
     rv = _add_regime_column(rv)
@@ -821,11 +822,16 @@ def _regime_merge(strategy: str | None, start: str | None = None, end: str | Non
         merged = rv.copy()
 
     merged = _filter_dates(merged, "date", start, end)
+    # Merge DTE and optionally filter
+    merged = merged.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
+    merged.drop(columns=["t_date"], inplace=True, errors="ignore")
+    if dte is not None and "DTE" in merged.columns:
+        merged = merged[merged["DTE"] == dte]
     return merged.sort_values("date")
 
 
 def _regime_merge_all_strategies(start: str | None = None, end: str | None = None,
-                                  snapshot: str = "1530") -> pd.DataFrame:
+                                  snapshot: str = "1530", dte: int | None = None) -> pd.DataFrame:
     """Merge RV+regime with ALL strategies for combined portfolio analysis."""
     rv = _compute_regime_features(RV_DATA, snapshot)
     rv = _add_regime_column(rv)
@@ -852,6 +858,10 @@ def _regime_merge_all_strategies(start: str | None = None, end: str | None = Non
     # Merge DTE from trading_dates
     result = result.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
     result.drop(columns=["t_date"], inplace=True, errors="ignore")
+
+    # Filter by DTE if requested
+    if dte is not None and "DTE" in result.columns:
+        result = result[result["DTE"] == dte]
 
     return result
 
@@ -901,9 +911,10 @@ def _regime_state_metrics(df: pd.DataFrame, state: str, pnl_col: str = "pnl_comb
 def get_regime_states(
     start_date: str | None = None, end_date: str | None = None,
     snapshot: str = "1530",
+    dte: int | None = None,
 ):
     """Return the complete 8-state regime table with portfolio metrics."""
-    merged = _regime_merge_all_strategies(start_date, end_date, snapshot)
+    merged = _regime_merge_all_strategies(start_date, end_date, snapshot, dte=dte)
 
     states = []
     for state in REGIME_STATES:
@@ -950,9 +961,10 @@ def get_regime_states(
 def get_regime_timeseries(
     start_date: str | None = None, end_date: str | None = None,
     snapshot: str = "1530",
+    dte: int | None = None,
 ):
     """Return daily regime state timeseries for timeline visualization."""
-    merged = _regime_merge_all_strategies(start_date, end_date, snapshot)
+    merged = _regime_merge_all_strategies(start_date, end_date, snapshot, dte=dte)
     valid = merged.dropna(subset=["regime_state"])
 
     records = []
@@ -984,9 +996,10 @@ def get_regime_strategy(
     strategy: str,
     start_date: str | None = None, end_date: str | None = None,
     snapshot: str = "1530",
+    dte: int | None = None,
 ):
     """Per-strategy breakdown by regime state."""
-    merged = _regime_merge(strategy, start_date, end_date, snapshot)
+    merged = _regime_merge(strategy, start_date, end_date, snapshot, dte=dte)
     merged = merged.dropna(subset=["regime_state", "Net_Daily_PnL_PerCent"])
 
     results = []
@@ -1025,9 +1038,10 @@ def get_regime_strategy(
 def get_regime_transitions(
     start_date: str | None = None, end_date: str | None = None,
     snapshot: str = "1530",
+    dte: int | None = None,
 ):
     """Regime transition matrix and streak analysis."""
-    merged = _regime_merge_all_strategies(start_date, end_date, snapshot)
+    merged = _regime_merge_all_strategies(start_date, end_date, snapshot, dte=dte)
     valid = merged.dropna(subset=["regime_state"]).sort_values("date")
     states_series = valid["regime_state"].values
 
@@ -1093,11 +1107,17 @@ def get_regime_transitions(
 def get_regime_feature_inputs(
     start_date: str | None = None, end_date: str | None = None,
     snapshot: str = "1530",
+    dte: int | None = None,
 ):
     """Return the raw regime input features timeseries for detailed analysis."""
     rv = _compute_regime_features(RV_DATA, snapshot)
     rv = _filter_dates(rv, "date", start_date, end_date)
     rv = rv.dropna(subset=["iv_lag"])
+    # Merge and filter DTE
+    rv = rv.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
+    rv.drop(columns=["t_date"], inplace=True, errors="ignore")
+    if dte is not None and "DTE" in rv.columns:
+        rv = rv[rv["DTE"] == dte]
 
     records = []
     for _, r in rv.iterrows():
@@ -1118,9 +1138,10 @@ def get_regime_feature_inputs(
 def get_regime_all_lose(
     start_date: str | None = None, end_date: str | None = None,
     snapshot: str = "1530",
+    dte: int | None = None,
 ):
     """Return all-lose day spot movement analysis grouped by regime state."""
-    merged = _regime_merge_all_strategies(start_date, end_date, snapshot)
+    merged = _regime_merge_all_strategies(start_date, end_date, snapshot, dte=dte)
     valid = merged.dropna(subset=["regime_state"]).copy()
 
     # Compute spot % change (close-to-close)
@@ -1271,6 +1292,7 @@ def get_data_exploration(
     feature: str,
     start_date: str | None = None, end_date: str | None = None,
     snapshot: str = "1530",
+    dte: int | None = None,
 ):
     """Full EDA pipeline for a single feature."""
     if feature not in EXPLORATION_FEATURES:
@@ -1316,6 +1338,8 @@ def get_data_exploration(
     # Merge DTE
     result = result.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
     result.drop(columns=["t_date"], inplace=True, errors="ignore")
+    if dte is not None and "DTE" in result.columns:
+        result = result[result["DTE"] == dte]
 
     # Extract feature series (drop NaN)
     if feature not in result.columns:
@@ -1738,9 +1762,10 @@ def get_feature_ranking(
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
     snapshot: str = Query("1530"),
+    dte: int | None = None,
 ):
     """Step 2: Quintile analysis of 6 candidate features, ranked by AL spread."""
-    merged = _regime_merge_all_strategies(start_date, end_date, snapshot)
+    merged = _regime_merge_all_strategies(start_date, end_date, snapshot, dte=dte)
 
     # Compute efficiency
     merged["efficiency"] = (
@@ -2036,9 +2061,10 @@ def get_feature_selection(
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
     snapshot: str = Query("1530"),
+    dte: int | None = None,
 ):
     """Step 3: Autocorrelation analysis — raw vs averaged features."""
-    merged = _regime_merge_all_strategies(start_date, end_date, snapshot)
+    merged = _regime_merge_all_strategies(start_date, end_date, snapshot, dte=dte)
 
     # Compute efficiency
     merged["efficiency"] = (
@@ -2206,9 +2232,10 @@ def get_regime_construction(
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
     snapshot: str = Query("1530"),
+    dte: int | None = None,
 ):
     """Step 4: Build the 8-state regime classification from scratch."""
-    merged = _regime_merge_all_strategies(start_date, end_date, snapshot)
+    merged = _regime_merge_all_strategies(start_date, end_date, snapshot, dte=dte)
     merged = merged.dropna(subset=["pnl_combined", "iv_lag"])
 
     # Compute per-level PK/IV medians from this filtered data for equal day splits
@@ -2776,6 +2803,7 @@ def get_regime_construction(
 def get_snapshot_comparison(
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
+    dte: int | None = None,
 ):
     """Compare regime classification across all 4 snapshots."""
     snapshots = ["1530", "1529", "0915", "0916"]
@@ -2795,7 +2823,7 @@ def get_snapshot_comparison(
     results = {}
     for snap in snapshots:
         try:
-            merged = _regime_merge_all_strategies(start_date, end_date, snap)
+            merged = _regime_merge_all_strategies(start_date, end_date, snap, dte=dte)
             merged = merged.dropna(subset=["pnl_combined", "iv_lag"])
 
             from collections import Counter
@@ -2930,6 +2958,345 @@ def get_snapshot_comparison(
     return {
         "snapshots": results,
         "agreement": agreement,
+    }
+
+
+@app.get("/api/regime/adaptive-oos")
+def get_adaptive_oos(
+    test_period: str = Query("1"),  # "1" = Jan2021-Jan2023, "2" = Feb-Mar 2026
+    snapshot: str = Query("1530"),
+    dte: int | None = None,
+):
+    """Adaptive IV boundaries + OOS validation."""
+    import scipy.stats as stats_module
+
+    PERIODS = {
+        "1": {"train_start": "2023-02-01", "train_end": "2026-01-30",
+              "test_start": "2021-01-01", "test_end": "2023-01-31",
+              "label": "Jan 2021 – Jan 2023 (OOS)"},
+        "2": {"train_start": "2021-01-01", "train_end": "2026-01-30",
+              "test_start": "2026-02-01", "test_end": "2026-02-28",
+              "label": "Feb 2026 (OOS)"},
+        "3": {"train_start": "2021-01-01", "train_end": "2026-01-30",
+              "test_start": "2026-03-01", "test_end": "2026-03-31",
+              "label": "Mar 2026 (OOS)"},
+        "4": {"train_start": "2021-01-01", "train_end": "2025-12-31",
+              "test_start": "2026-01-01", "test_end": "2026-01-31",
+              "label": "Jan 2026 (OOS)"},
+    }
+
+    if test_period not in PERIODS:
+        return {"error": f"Invalid test_period: {test_period}"}
+
+    p = PERIODS[test_period]
+
+    # ── Compute features on FULL data first ──
+    full_rv = _compute_regime_features(RV_DATA, snapshot)
+
+    # ── Merge strategy PnLs ──
+    result = full_rv.copy()
+    for skey, sdf in STRAT_DATA.items():
+        st = sdf[["Date", "Net_Daily_PnL_PerCent"]].copy()
+        st.columns = ["Date", f"pnl_{skey}"]
+        result = result.merge(st, left_on="date", right_on="Date", how="left")
+        result.drop(columns=["Date"], inplace=True, errors="ignore")
+    pnl_cols = [f"pnl_{s}" for s in ["dm", "wc", "orion"] if f"pnl_{s}" in result.columns]
+    if pnl_cols:
+        result["pnl_combined"] = result[pnl_cols].mean(axis=1)
+        _pnl = result[pnl_cols]
+        _has_all = _pnl.notna().all(axis=1)
+        result["all_lose"] = _has_all & (_pnl < 0).all(axis=1)
+        result["all_win"] = _has_all & (_pnl > 0).all(axis=1)
+
+    # Merge DTE
+    result = result.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
+    result.drop(columns=["t_date"], inplace=True, errors="ignore")
+    if dte is not None and "DTE" in result.columns:
+        result = result[result["DTE"] == dte]
+
+    result = result.dropna(subset=["iv_lag"]).sort_values("date").reset_index(drop=True)
+
+    # ── Split train/test ──
+    from datetime import date as dt_date
+    def _to_date(s):
+        parts = s.split("-")
+        return dt_date(int(parts[0]), int(parts[1]), int(parts[2]))
+    train_mask = (result["date"] >= _to_date(p["train_start"])) & (result["date"] <= _to_date(p["train_end"]))
+    test_mask = (result["date"] >= _to_date(p["test_start"])) & (result["date"] <= _to_date(p["test_end"]))
+    train_df = result[train_mask].copy()
+    test_df = result[test_mask].copy()
+
+    if len(test_df) == 0:
+        return {"error": "No test data in range"}
+
+    # ── Step 1: Compute FIXED boundary classification on train (in-sample) ──
+    def compute_pkiv_medians_for_boundaries(df, l1_upper, l2_upper):
+        clean = df.dropna(subset=["iv_lag", "PK_IV_ratio"])
+        l1 = clean[clean["iv_lag"] < l1_upper]["PK_IV_ratio"]
+        l2 = clean[(clean["iv_lag"] >= l1_upper) & (clean["iv_lag"] < l2_upper)]["PK_IV_ratio"]
+        l3 = clean[clean["iv_lag"] >= l2_upper]["PK_IV_ratio"]
+        return {
+            "L1": round(float(l1.median()), 4) if len(l1) > 5 else 0.63,
+            "L2": round(float(l2.median()), 4) if len(l2) > 5 else 0.65,
+            "L3": round(float(l3.median()), 4) if len(l3) > 5 else 0.67,
+        }
+
+    def classify_day(iv_lag, pk_iv, iv_chg, l1_upper, l2_upper, medians):
+        if pd.isna(iv_lag) or pd.isna(pk_iv):
+            return None
+        if iv_lag < l1_upper:
+            return "L1 Safe" if pk_iv <= medians["L1"] else "L1 Exposed"
+        elif iv_lag < l2_upper:
+            iv_falling = iv_chg <= 0 if not pd.isna(iv_chg) else True
+            if pk_iv <= medians["L2"]:
+                return "L2 Safe" if iv_falling else "L2 Caution-B"
+            else:
+                return "L2 Caution-A" if iv_falling else "L2 Risky"
+        else:
+            return "L3 Safe" if pk_iv <= medians["L3"] else "L3 Exposed"
+
+    # Training data: use the defined train period (may be non-overlapping with test)
+    all_before_test = train_df.copy()
+    if len(all_before_test) < 20:
+        # fallback: use all data outside test period
+        all_before_test = result[~test_mask].copy()
+
+    fixed_medians = compute_pkiv_medians_for_boundaries(all_before_test, 12, 17)
+    shifted_medians = compute_pkiv_medians_for_boundaries(all_before_test, 17, 22)
+
+    # ── Step 2: Compute adaptive boundaries per day in test period ──
+    LOOKBACK = 45
+    HIGH_IV_THRESHOLD = 17
+    SHIFT_PCT = 0.50
+    SHIFTED_L1 = 17
+    SHIFTED_L2 = 22
+
+    timeline = []
+    for idx in test_df.index:
+        row = result.loc[idx]
+        date_val = row["date"]
+        iv_lag_val = row["iv_lag"]
+        pk_iv_val = row.get("PK_IV_ratio", np.nan)
+        iv_chg_val = row.get("IV_chg_5d", np.nan)
+
+        # Trailing 45d window (from full result, before this date)
+        prior = result[(result["date"] < date_val)].tail(LOOKBACK)
+        if len(prior) > 0:
+            high_iv_pct = float((prior["iv_lag"] > HIGH_IV_THRESHOLD).mean())
+        else:
+            high_iv_pct = 0.0
+
+        boundary_shifted = high_iv_pct > SHIFT_PCT
+        l1_upper = SHIFTED_L1 if boundary_shifted else 12
+        l2_upper = SHIFTED_L2 if boundary_shifted else 17
+        medians_used = shifted_medians if boundary_shifted else fixed_medians
+
+        # Regime under FIXED boundaries (always 12/17)
+        regime_fixed = classify_day(iv_lag_val, pk_iv_val, iv_chg_val, 12, 17, fixed_medians)
+        # Regime under ADAPTIVE boundaries
+        regime_adaptive = classify_day(iv_lag_val, pk_iv_val, iv_chg_val, l1_upper, l2_upper, medians_used)
+
+        pnl_combined_val = row.get("pnl_combined", np.nan)
+
+        timeline.append({
+            "date": str(date_val)[:10] if hasattr(date_val, 'strftime') else str(date_val)[:10],
+            "iv_lag": round(float(iv_lag_val), 2) if not pd.isna(iv_lag_val) else None,
+            "pk_iv_ratio": round(float(pk_iv_val), 4) if not pd.isna(pk_iv_val) else None,
+            "iv_chg_5d": round(float(iv_chg_val), 4) if not pd.isna(iv_chg_val) else None,
+            "trailing_45d_high_pct": round(high_iv_pct * 100, 1),
+            "boundary_shifted": boundary_shifted,
+            "l1_upper": l1_upper,
+            "l2_upper": l2_upper,
+            "regime_fixed": regime_fixed,
+            "regime_adaptive": regime_adaptive,
+            "pnl_combined": round(float(pnl_combined_val), 4) if not pd.isna(pnl_combined_val) else None,
+        })
+
+    # Apply classifications to test_df
+    test_df["regime_fixed"] = [t["regime_fixed"] for t in timeline]
+    test_df["regime_adaptive"] = [t["regime_adaptive"] for t in timeline]
+    test_df["boundary_shifted"] = [t["boundary_shifted"] for t in timeline]
+
+    # ── Step 3: Also classify train data with fixed boundaries for in-sample reference ──
+    all_before_test["regime_state"] = all_before_test.apply(
+        lambda r: classify_day(r["iv_lag"], r.get("PK_IV_ratio", np.nan),
+                               r.get("IV_chg_5d", np.nan), 12, 17, fixed_medians), axis=1)
+
+    # ── Helper to compute state metrics ──
+    def state_metrics(df, regime_col="regime_state"):
+        all_states = REGIME_STATES
+        metrics = []
+        total = len(df[df[regime_col].notna()])
+        for state in all_states:
+            sub = df[df[regime_col] == state]
+            n = len(sub)
+            if n == 0:
+                metrics.append({"state": state, "color": REGIME_COLORS.get(state, "#666"),
+                                "days": 0, "pct": 0, "al_pct": None, "aw_pct": None,
+                                "port_avg": None, "sharpe": None,
+                                "dm_avg": None, "dm_sharpe": None, "wc_avg": None, "wc_sharpe": None,
+                                "orion_avg": None, "orion_sharpe": None, "pk_iv_mean": None})
+                continue
+            pnl = sub["pnl_combined"].dropna() if "pnl_combined" in sub.columns else pd.Series(dtype=float)
+            m = float(pnl.mean()) if len(pnl) > 0 else None
+            s = float(pnl.std()) if len(pnl) > 1 else None
+            sh = round((m * 252 - RISK_FREE_PCT) / (s * (252 ** 0.5)), 2) if m is not None and s and s > 0 else None
+            al = float(sub["all_lose"].sum() / n * 100) if "all_lose" in sub.columns and n > 0 else None
+            aw = float(sub["all_win"].sum() / n * 100) if "all_win" in sub.columns and n > 0 else None
+
+            row = {"state": state, "color": REGIME_COLORS.get(state, "#666"),
+                   "days": n, "pct": round(n / total * 100, 1) if total > 0 else 0,
+                   "al_pct": round(al, 1) if al is not None else None,
+                   "aw_pct": round(aw, 1) if aw is not None else None,
+                   "port_avg": round(m, 4) if m is not None else None,
+                   "sharpe": sh,
+                   "pk_iv_mean": round(float(sub["PK_IV_ratio"].mean()), 4) if "PK_IV_ratio" in sub.columns else None}
+
+            for skey in ["dm", "wc", "orion"]:
+                col = f"pnl_{skey}"
+                if col in sub.columns:
+                    sp = sub[col].dropna()
+                    sm = float(sp.mean()) if len(sp) > 0 else None
+                    ss = float(sp.std()) if len(sp) > 1 else None
+                    shr = round((sm * 252 - RISK_FREE_PCT) / (ss * (252 ** 0.5)), 2) if sm is not None and ss and ss > 0 else None
+                    row[f"{skey}_avg"] = round(sm, 4) if sm is not None else None
+                    row[f"{skey}_sharpe"] = shr
+                else:
+                    row[f"{skey}_avg"] = None
+                    row[f"{skey}_sharpe"] = None
+            metrics.append(row)
+        return metrics
+
+    insample_states = state_metrics(all_before_test, "regime_state")
+    fixed_states = state_metrics(test_df, "regime_fixed")
+    adaptive_states = state_metrics(test_df, "regime_adaptive")
+
+    # ── Step 4: Validation metrics ──
+    # Rank correlation: order states by port_avg, compare IS vs OOS
+    def rank_vector(state_list):
+        return [s.get("port_avg") or 0 for s in state_list]
+
+    is_ranks = rank_vector(insample_states)
+    fixed_ranks = rank_vector(fixed_states)
+    adaptive_ranks = rank_vector(adaptive_states)
+
+    def _safe_float(v):
+        if v is None or (isinstance(v, float) and (np.isnan(v) or np.isinf(v))):
+            return None
+        return round(float(v), 3)
+
+    try:
+        rc_fixed = _safe_float(stats_module.spearmanr(is_ranks, fixed_ranks).correlation)
+    except Exception:
+        rc_fixed = None
+    try:
+        rc_adaptive = _safe_float(stats_module.spearmanr(is_ranks, adaptive_ranks).correlation)
+    except Exception:
+        rc_adaptive = None
+
+    # Safe vs Exposed checks
+    def safe_beats_exposed(states, level_prefix):
+        safe_name = f"{level_prefix} Safe"
+        exposed_name = f"{level_prefix} Exposed"
+        safe = next((s for s in states if s["state"] == safe_name), None)
+        exposed = next((s for s in states if s["state"] == exposed_name), None)
+        if not safe or not exposed or safe["al_pct"] is None or exposed["al_pct"] is None:
+            return None
+        return safe["al_pct"] < exposed["al_pct"]
+
+    # PK/IV separation: low PK/IV states have lower AL%
+    safe_checks_fixed = {lvl: safe_beats_exposed(fixed_states, lvl) for lvl in ["L1", "L2", "L3"]}
+    safe_checks_adaptive = {lvl: safe_beats_exposed(adaptive_states, lvl) for lvl in ["L1", "L2", "L3"]}
+
+    # Boundary shift stats
+    shifted_days = sum(1 for t in timeline if t["boundary_shifted"])
+    total_test_days = len(timeline)
+    regime_disagreement = sum(1 for t in timeline if t["regime_fixed"] != t["regime_adaptive"])
+
+    # ── Step 5: PK/IV diagnostic ──
+    # Show PK/IV medians used, plus OOS actual medians
+    def oos_pkiv_medians(df, regime_col):
+        medians = {}
+        for state in REGIME_STATES:
+            sub = df[df[regime_col] == state]
+            if len(sub) > 0 and "PK_IV_ratio" in sub.columns:
+                medians[state] = round(float(sub["PK_IV_ratio"].dropna().median()), 4) if len(sub["PK_IV_ratio"].dropna()) > 0 else None
+            else:
+                medians[state] = None
+        return medians
+
+    # ── Step 6: Safe vs Exposed PnL comparison per level ──
+    def level_comparison(states):
+        comparisons = []
+        for lvl in ["L1", "L2", "L3"]:
+            safe = next((s for s in states if s["state"] == f"{lvl} Safe"), None)
+            if lvl == "L2":
+                # For L2, compare Safe vs Risky
+                exposed = next((s for s in states if s["state"] == "L2 Risky"), None)
+            else:
+                exposed = next((s for s in states if s["state"] == f"{lvl} Exposed"), None)
+            comparisons.append({
+                "level": lvl,
+                "safe_avg": safe["port_avg"] if safe else None,
+                "safe_al": safe["al_pct"] if safe else None,
+                "safe_sharpe": safe["sharpe"] if safe else None,
+                "safe_days": safe["days"] if safe else 0,
+                "exposed_avg": exposed["port_avg"] if exposed else None,
+                "exposed_al": exposed["al_pct"] if exposed else None,
+                "exposed_sharpe": exposed["sharpe"] if exposed else None,
+                "exposed_days": exposed["days"] if exposed else 0,
+            })
+        return comparisons
+
+    # ── Step 7: Boundary shift period analysis ──
+    shifted_subset = test_df[test_df["boundary_shifted"] == True].copy() if shifted_days > 0 else pd.DataFrame()
+    fixed_subset = test_df[test_df["boundary_shifted"] == False].copy()
+
+    def overall_metrics(df):
+        if len(df) == 0 or "pnl_combined" not in df.columns:
+            return {"days": 0, "sharpe": None, "al_pct": None, "port_avg": None}
+        pnl = df["pnl_combined"].dropna()
+        m = float(pnl.mean()) if len(pnl) > 0 else None
+        s = float(pnl.std()) if len(pnl) > 1 else None
+        sh = round((m * 252 - RISK_FREE_PCT) / (s * (252 ** 0.5)), 2) if m is not None and s and s > 0 else None
+        al = float(df["all_lose"].sum() / len(df) * 100) if "all_lose" in df.columns else None
+        return {"days": len(df), "sharpe": sh, "al_pct": round(al, 1) if al is not None else None,
+                "port_avg": round(m, 4) if m is not None else None}
+
+    return {
+        "training_period": {"start": p["train_start"], "end": p["train_end"],
+                            "days": len(all_before_test), "label": f"Training ({p['train_start'][:4]}–{p['train_end'][:4]})"},
+        "test_period": {"start": p["test_start"], "end": p["test_end"],
+                        "days": len(test_df), "label": p["label"]},
+        "boundary_timeline": timeline,
+        "insample_states": insample_states,
+        "fixed_states": fixed_states,
+        "adaptive_states": adaptive_states,
+        "validation": {
+            "rank_corr_fixed": rc_fixed,
+            "rank_corr_adaptive": rc_adaptive,
+            "safe_checks_fixed": safe_checks_fixed,
+            "safe_checks_adaptive": safe_checks_adaptive,
+            "shifted_days": shifted_days,
+            "fixed_days": total_test_days - shifted_days,
+            "total_test_days": total_test_days,
+            "shift_pct": round(shifted_days / total_test_days * 100, 1) if total_test_days > 0 else 0,
+            "regime_disagreement": regime_disagreement,
+            "disagreement_pct": round(regime_disagreement / total_test_days * 100, 1) if total_test_days > 0 else 0,
+        },
+        "pkiv_diagnostic": {
+            "fixed_medians_used": fixed_medians,
+            "shifted_medians_used": shifted_medians,
+            "oos_fixed_medians": oos_pkiv_medians(test_df, "regime_fixed"),
+            "oos_adaptive_medians": oos_pkiv_medians(test_df, "regime_adaptive"),
+        },
+        "level_comparison_fixed": level_comparison(fixed_states),
+        "level_comparison_adaptive": level_comparison(adaptive_states),
+        "level_comparison_insample": level_comparison(insample_states),
+        "shift_period_metrics": {
+            "shifted": overall_metrics(shifted_subset),
+            "non_shifted": overall_metrics(fixed_subset),
+        },
     }
 
 
