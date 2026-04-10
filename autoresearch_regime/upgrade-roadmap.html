@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upgrade Roadmap: RD-Agent(Q) + FinRL-X Integration</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2332;
+    --border: #1e2d3d;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --accent: #38bdf8;
+    --green: #34d399;
+    --red: #f87171;
+    --orange: #fb923c;
+    --purple: #a78bfa;
+    --yellow: #fbbf24;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
+    --teal: #2dd4bf;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+
+  .hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1a0f2e 50%, #0f172a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 40px 50px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(167,139,250,0.08) 0%, transparent 60%);
+  }
+  .hero h1 {
+    font-size: 2.6rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    position: relative;
+    background: linear-gradient(135deg, #22d3ee, #a78bfa, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero .subtitle {
+    color: var(--text2);
+    font-size: 1.1rem;
+    margin-top: 12px;
+    position: relative;
+  }
+  .hero .context {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 24px;
+    border-radius: 8px;
+    background: rgba(56,189,248,0.08);
+    border: 1px solid rgba(56,189,248,0.2);
+    color: var(--accent);
+    font-size: 0.85rem;
+    position: relative;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+
+  .section { margin-bottom: 48px; }
+  .section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .icon { font-size: 1.3rem; }
+
+  .part-divider {
+    text-align: center;
+    padding: 48px 20px 32px;
+    position: relative;
+  }
+  .part-divider::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+  .part-divider h2 {
+    position: relative;
+    display: inline-block;
+    background: var(--bg);
+    padding: 0 24px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text2);
+  }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .card .card-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text2); margin-bottom: 6px; }
+  .card .card-value { font-size: 2rem; font-weight: 700; }
+  .card .card-detail { font-size: 0.85rem; color: var(--text2); margin-top: 4px; line-height: 1.55; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th {
+    text-align: left; padding: 12px 14px; background: var(--surface2);
+    border-bottom: 1px solid var(--border); font-weight: 600;
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2);
+  }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: rgba(56,189,248,0.03); }
+  .mono { font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+
+  .formula-box {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 24px 28px; font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 0.85rem; line-height: 1.9; overflow-x: auto;
+  }
+  .formula-box .kw { color: var(--accent); }
+  .formula-box .cmt { color: #475569; }
+  .formula-box .str { color: var(--green); }
+  .formula-box .num { color: var(--orange); }
+  .formula-box .meta { color: var(--purple); }
+
+  .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  .insight {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px; border-left: 3px solid var(--green);
+  }
+  .insight.warn { border-left-color: var(--red); }
+  .insight.meta { border-left-color: var(--purple); }
+  .insight.teal { border-left-color: var(--teal); }
+  .insight.amber { border-left-color: var(--orange); }
+  .insight .insight-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; }
+  .insight .insight-body { font-size: 0.84rem; color: var(--text2); line-height: 1.55; }
+
+  .pipeline { display: flex; align-items: center; gap: 0; flex-wrap: wrap; justify-content: center; }
+  .pipe-step {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; text-align: center; min-width: 140px;
+  }
+  .pipe-step .step-num { font-size: 0.7rem; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+  .pipe-step .step-title { font-size: 0.95rem; font-weight: 600; margin-top: 4px; }
+  .pipe-step .step-desc { font-size: 0.75rem; color: var(--text2); margin-top: 4px; }
+  .pipe-arrow { font-size: 1.2rem; color: var(--border); padding: 0 6px; }
+
+  .nested-arch {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  .outer-box {
+    border: 2px solid var(--cyan);
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+  }
+  .outer-box .box-label {
+    position: absolute; top: -12px; left: 20px;
+    background: var(--surface); padding: 0 10px;
+    font-size: 0.82rem; font-weight: 700; color: var(--cyan);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .mid-box {
+    border: 2px solid var(--purple);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+    position: relative;
+  }
+  .mid-box .box-label {
+    position: absolute; top: -12px; left: 20px;
+    background: var(--surface); padding: 0 10px;
+    font-size: 0.82rem; font-weight: 700; color: var(--purple);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .inner-box {
+    border: 2px solid var(--green);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+    position: relative;
+  }
+  .inner-box .box-label {
+    position: absolute; top: -12px; left: 20px;
+    background: var(--surface); padding: 0 10px;
+    font-size: 0.82rem; font-weight: 700; color: var(--green);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .arch-row { display: flex; gap: 12px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  .arch-item {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 16px; font-size: 0.82rem;
+  }
+  .arch-item.new { border-color: var(--cyan); color: var(--cyan); }
+  .arch-item.existing { border-color: var(--green); color: var(--green); }
+  .arch-item.meta { border-color: var(--purple); color: var(--purple); }
+  .arch-item.data { border-color: var(--orange); color: var(--orange); }
+  .arch-item.frozen { border-color: var(--border); color: var(--text2); }
+  .arch-arrow { color: var(--text2); font-size: 0.9rem; }
+  .arch-note { font-size: 0.78rem; color: var(--text2); margin-top: 4px; }
+
+  .upgrade-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .upgrade-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .upgrade-card.p1::before { background: linear-gradient(90deg, var(--green), var(--cyan)); }
+  .upgrade-card.p2::before { background: linear-gradient(90deg, var(--purple), var(--pink)); }
+  .upgrade-card.p3::before { background: linear-gradient(90deg, var(--accent), var(--purple)); }
+  .upgrade-card.p4::before { background: linear-gradient(90deg, var(--orange), var(--yellow)); }
+  .upgrade-card.p5::before { background: linear-gradient(90deg, var(--pink), var(--red)); }
+  .upgrade-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .upgrade-num {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.95rem; flex-shrink: 0;
+  }
+  .upgrade-num.p1 { background: rgba(52,211,153,0.15); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+  .upgrade-num.p2 { background: rgba(167,139,250,0.15); color: var(--purple); border: 1px solid rgba(167,139,250,0.3); }
+  .upgrade-num.p3 { background: rgba(56,189,248,0.15); color: var(--accent); border: 1px solid rgba(56,189,248,0.3); }
+  .upgrade-num.p4 { background: rgba(251,146,60,0.15); color: var(--orange); border: 1px solid rgba(251,146,60,0.3); }
+  .upgrade-num.p5 { background: rgba(244,114,182,0.15); color: var(--pink); border: 1px solid rgba(244,114,182,0.3); }
+  .upgrade-title { font-size: 1.15rem; font-weight: 600; }
+  .upgrade-source { font-size: 0.78rem; color: var(--text2); margin-top: 2px; }
+  .upgrade-body { font-size: 0.9rem; color: var(--text2); line-height: 1.65; }
+  .upgrade-body strong { color: var(--text); }
+  .upgrade-tags { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .tag {
+    display: inline-block; padding: 4px 12px; border-radius: 6px;
+    font-size: 0.75rem; font-weight: 600;
+  }
+  .tag.impact { background: rgba(52,211,153,0.12); color: var(--green); border: 1px solid rgba(52,211,153,0.2); }
+  .tag.effort { background: rgba(251,146,60,0.12); color: var(--orange); border: 1px solid rgba(251,146,60,0.2); }
+  .tag.source-rd { background: rgba(45,212,191,0.12); color: var(--teal); border: 1px solid rgba(45,212,191,0.2); }
+  .tag.source-fin { background: rgba(251,191,36,0.12); color: var(--yellow); border: 1px solid rgba(251,191,36,0.2); }
+
+  .file-map {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .file-entry {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+  }
+  .file-entry .fname { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; }
+  .file-entry .fdesc { font-size: 0.78rem; color: var(--text2); }
+  .file-entry.new { border-color: rgba(45,212,191,0.4); }
+  .file-entry.new .fname { color: var(--cyan); }
+  .file-entry.modified { border-color: rgba(167,139,250,0.4); }
+  .file-entry.modified .fname { color: var(--purple); }
+  .file-entry.unchanged .fname { color: var(--text2); }
+
+  .comparison-row {
+    display: grid;
+    grid-template-columns: 200px 1fr 1fr;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .comparison-row > div {
+    padding: 12px 16px;
+    font-size: 0.85rem;
+  }
+  .comparison-row.header > div {
+    background: var(--surface2);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text2);
+  }
+  .comparison-row .dim { color: var(--text2); font-weight: 500; }
+
+  .priority-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+  .priority-bar .bar-fill {
+    height: 6px;
+    border-radius: 3px;
+    flex: 1;
+  }
+  .priority-bar .bar-label { font-size: 0.85rem; font-weight: 600; min-width: 180px; }
+  .priority-bar .bar-value { font-size: 0.82rem; color: var(--text2); min-width: 120px; text-align: right; }
+
+  .footer {
+    text-align: center; padding: 40px 20px;
+    border-top: 1px solid var(--border); color: #475569; font-size: 0.78rem;
+  }
+
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 1.8rem; }
+    .hero { padding: 40px 20px 36px; }
+    .container { padding: 24px 16px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .file-map { grid-template-columns: 1fr; }
+    .comparison-row { grid-template-columns: 1fr; }
+    .pipeline { flex-direction: column; }
+    .pipe-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ HERO ════════════════════ -->
+<div class="hero">
+  <h1>Upgrade Roadmap: RD-Agent(Q) + FinRL-X</h1>
+  <div class="subtitle">5 targeted upgrades to your Regime Autoresearch + Meta-Harness system</div>
+  <div class="context">
+    Addresses the core problem: inner loop 0.926 validation &rarr; OOS Sharpe 0.00 on Feb&ndash;Mar 2026
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ════════════════════ DIAGNOSIS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128269;</span> Diagnosis: What Your System Does Well vs. What's Missing</div>
+  <div class="insight-grid">
+    <div class="insight">
+      <div class="insight-title">Two-loop architecture &mdash; correct</div>
+      <div class="insight-body">
+        The structural separation between inner loop (classifier optimization) and outer loop (frame optimization) is the right design. The inner loop's Claude agent doesn't know it's inside a meta-harness. This isolation is exactly what prevents the agent from gaming the evaluation.
+      </div>
+    </div>
+    <div class="insight">
+      <div class="insight-title">OOS holdout &mdash; correct</div>
+      <div class="insight-body">
+        Reserving 2021&ndash;2023 + Feb&ndash;Mar 2026 as data the inner loop never sees is the right structural choice. The fact that OOS revealed Sharpe 0.00 on recent data proves this safeguard is working &mdash; it caught the problem before deployment.
+      </div>
+    </div>
+    <div class="insight warn">
+      <div class="insight-title">No experiment memory across iterations</div>
+      <div class="insight-body">
+        The inner loop runs ~40 experiments per meta-iteration, then <strong style="color:var(--text)">all that knowledge disappears</strong>. Next meta-iteration, the agent starts fresh from the baseline. It has no memory of what failed, what patterns emerged, or which search directions were dead ends. This means it re-discovers (and re-discards) the same bad ideas.
+      </div>
+    </div>
+    <div class="insight warn">
+      <div class="insight-title">No feature deduplication</div>
+      <div class="insight-body">
+        The feature registry has 8 features, but IV_20d and PK_20d are both 20-day vol measures with near-identical information content. The inner loop can activate both, inflating apparent signal diversity without adding real orthogonal information.
+      </div>
+    </div>
+    <div class="insight warn">
+      <div class="insight-title">Fixed sweep order wastes budget</div>
+      <div class="insight-body">
+        The meta-harness sweeps all 4 dimensions sequentially (scoring: 8, norms: 6, features: 7, splits: 5 = 26 configs). At 20&ndash;60 min each, that's 9&ndash;26 hours. But some dimensions will yield much more OOS improvement than others &mdash; no adaptive allocation.
+      </div>
+    </div>
+    <div class="insight warn">
+      <div class="insight-title">Only backward-looking OOS</div>
+      <div class="insight-body">
+        OOS data is historical (2021&ndash;2023 + Feb&ndash;Mar 2026). There is no forward paper-trade gate that validates the classifier works on <em>genuinely unseen future data</em> before promotion to production.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="part-divider"><h2>The 5 Upgrades</h2></div>
+<!-- ════════════════════════════════════════════════════════ -->
+
+<!-- ═══════════════ UPGRADE 1 ═══════════════ -->
+<div class="upgrade-card p1">
+  <div class="upgrade-header">
+    <div class="upgrade-num p1">1</div>
+    <div>
+      <div class="upgrade-title">Knowledge Forest</div>
+      <div class="upgrade-source">From RD-Agent(Q) &mdash; Highest Priority</div>
+    </div>
+  </div>
+  <div class="upgrade-body">
+    <p>
+      <strong>The gap:</strong> Your inner loop is stateless across meta-iterations. Every time the meta-harness writes a new <code style="color:var(--purple)">meta_config.json</code> and resets the baseline, the agent loses all memory of what worked and what didn't. This means it re-tries approaches your own insights already identified as failures: adaptive boundaries, dual-snapshot fusion, WC-heavy weights in L2/L3.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>The fix:</strong> Add an <code style="color:var(--cyan)">experiment_forest.json</code> that persists across all meta-iterations. Every experiment the inner loop runs gets logged with: the hypothesis (what change was proposed), the result (composite score, per-component breakdown), whether it was kept or reverted, and a one-line reason (why it helped or hurt). Both <code style="color:var(--text2)">program_regime.md</code> and <code style="color:var(--text2)">program_meta_harness.md</code> instruct the agent to read this forest before proposing changes.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>RD-Agent's specific pattern:</strong> The knowledge forest maintains a "State-of-the-Art" (SOTA) set of best-performing configurations and adaptively adjusts hypothesis complexity based on recent performance. When generating a new hypothesis, the system conditions on the full experiment history using a retrieval function that surfaces the most relevant prior experiments. This prevents revisiting failed paths and enables the agent to build on successful discoveries across iterations.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>Impact on your OOS problem:</strong> The agent currently finds the same IV boundary compression [8.5, 11] every iteration because it works on validation. But with a knowledge forest, it would see that this boundary consistently produces Sharpe 0.00 on recent OOS data across multiple meta-configs &mdash; and would be pushed toward exploring fundamentally different classification approaches instead of refining the same one.
+    </p>
+  </div>
+  <div class="upgrade-tags">
+    <span class="tag impact">Highest ROI</span>
+    <span class="tag effort">~200 lines of code</span>
+    <span class="tag source-rd">RD-Agent(Q)</span>
+  </div>
+</div>
+
+<!-- ═══════════════ UPGRADE 2 ═══════════════ -->
+<div class="upgrade-card p2">
+  <div class="upgrade-header">
+    <div class="upgrade-num p2">2</div>
+    <div>
+      <div class="upgrade-title">Multi-Armed Bandit Scheduler</div>
+      <div class="upgrade-source">From RD-Agent(Q) &mdash; High Priority</div>
+    </div>
+  </div>
+  <div class="upgrade-body">
+    <p>
+      <strong>The gap:</strong> Your pre-built sweeps run all 26 configs sequentially: <code style="color:var(--text2)">--sweep scoring</code> (8) &rarr; <code style="color:var(--text2)">--sweep norms</code> (6) &rarr; <code style="color:var(--text2)">--sweep features</code> (7) &rarr; <code style="color:var(--text2)">--sweep splits</code> (5). But if scoring weight changes produce 10&times; more OOS improvement than norm changes, you're wasting 6 iterations on norms that could have explored more scoring configs.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>The fix:</strong> Replace <code style="color:var(--purple)">--sweep all</code> with a UCB1 multi-armed bandit in <code style="color:var(--purple)">meta_harness.py</code>. Each dimension is an arm. After each meta-iteration, record the OOS delta. The MAB allocates the next iteration to the dimension with highest UCB score: <code style="color:var(--accent)">mean_improvement + c * sqrt(ln(total_iters) / dim_iters)</code>. The exploration constant <code style="color:var(--accent)">c</code> ensures under-explored dimensions still get occasional pulls.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>RD-Agent's specific pattern:</strong> RD-Agent uses a multi-armed bandit scheduler for adaptive direction selection between factor mining and model innovation. Applied to your system, the 4 meta-harness dimensions (scoring weights, norms, features, splits) become the arms. The MAB tracks a sliding window of OOS deltas per dimension and uses Thompson sampling to balance exploration vs. exploitation.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>Practical effect:</strong> Your overnight run (say 12 hours, ~20 meta-iterations) concentrates on whichever dimension is actually moving OOS Sharpe instead of uniformly distributing budget across all dimensions.
+    </p>
+  </div>
+  <div class="upgrade-tags">
+    <span class="tag impact">2&ndash;3&times; faster convergence</span>
+    <span class="tag effort">~100 lines of code</span>
+    <span class="tag source-rd">RD-Agent(Q)</span>
+  </div>
+</div>
+
+<!-- ═══════════════ UPGRADE 3 ═══════════════ -->
+<div class="upgrade-card p3">
+  <div class="upgrade-header">
+    <div class="upgrade-num p3">3</div>
+    <div>
+      <div class="upgrade-title">IC Deduplication Gate</div>
+      <div class="upgrade-source">From RD-Agent(Q) &mdash; Medium Priority</div>
+    </div>
+  </div>
+  <div class="upgrade-body">
+    <p>
+      <strong>The gap:</strong> Your feature registry has 8 features the meta-harness can activate. But features like <code style="color:var(--cyan)">IV_20d</code> and <code style="color:var(--cyan)">PK_20d</code> (both 20-day vol measures) are highly correlated. Activating both gives the inner loop two ways to express the same signal, which inflates apparent diversity without adding orthogonal information. Worse, the inner loop might split the tree on one, then the other, creating a classifier that's overfitting to noise in the difference between two nearly identical signals.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>The fix:</strong> Add a deduplication step in <code style="color:var(--purple)">prepare_rv_meta.py</code> that runs before the inner loop starts. Compute pairwise Spearman rank correlation of all activated features across the training period. Drop any feature whose max |correlation| with another activated feature exceeds 0.75. Log which features were dropped and why to the knowledge forest.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>RD-Agent's specific pattern:</strong> RD-Agent checks the information coefficient of every new factor against existing factors and rejects any with IC above a threshold. The IC check is cross-sectional for stock selection; for your regime classifier, the analogous check is time-series correlation between feature values across the training window.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>Candidate redundancy pairs to investigate:</strong>
+    </p>
+  </div>
+  <div style="overflow-x:auto; margin-top:12px;">
+    <table>
+      <thead>
+        <tr><th>Feature A</th><th>Feature B</th><th>Likely Redundant?</th><th>Rationale</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono" style="color:var(--cyan)">IV_20d</td>
+          <td class="mono" style="color:var(--cyan)">PK_20d</td>
+          <td style="color:var(--red)">Very likely</td>
+          <td style="color:var(--text2)">Both 20-day vol &mdash; PK uses high-low, IV uses options market. Same thing with different noise.</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--cyan)">VRP_5d</td>
+          <td class="mono" style="color:var(--cyan)">RV_IV_gap</td>
+          <td style="color:var(--orange)">Likely</td>
+          <td style="color:var(--text2)">VRP = IV - RV smoothed; RV_IV_gap = RV - IV instantaneous. Same signal, different sign/window.</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--cyan)">IV_momentum_5d</td>
+          <td class="mono" style="color:var(--cyan)">IV_range_10d</td>
+          <td style="color:var(--green)">Probably not</td>
+          <td style="color:var(--text2)">Momentum = direction; range = magnitude. Orthogonal concepts.</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--cyan)">PK_IV_zscore_60d</td>
+          <td class="mono" style="color:var(--cyan)">IV_vol_of_vol_20d</td>
+          <td style="color:var(--green)">Probably not</td>
+          <td style="color:var(--text2)">Zscore = level relative to history; vol-of-vol = instability of vol itself.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="upgrade-tags" style="margin-top:16px;">
+    <span class="tag impact">Cleaner feature set</span>
+    <span class="tag effort">~60 lines of code</span>
+    <span class="tag source-rd">RD-Agent(Q)</span>
+  </div>
+</div>
+
+<!-- ═══════════════ UPGRADE 4 ═══════════════ -->
+<div class="upgrade-card p4">
+  <div class="upgrade-header">
+    <div class="upgrade-num p4">4</div>
+    <div>
+      <div class="upgrade-title">Classifier &ndash; Strategy Co-Optimization</div>
+      <div class="upgrade-source">From RD-Agent(Q) &mdash; Medium Priority</div>
+    </div>
+  </div>
+  <div class="upgrade-body">
+    <p>
+      <strong>The gap:</strong> Your inner loop only modifies <code style="color:var(--green)">regime_experiment.py</code> &mdash; the classifier. This includes IV boundaries, feature selection, tree architecture, and <em>strategy weight allocations per state</em> (e.g., L1 Safe = [0, 1, 0] for WC). But the strategy parameters themselves (DM delta thresholds, WC condor strike widths, Orion entry logic) are fixed. You're optimizing <em>which</em> strategy to deploy, but not <em>how</em> each strategy behaves within its assigned regime.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>The fix:</strong> Add a second optimization dimension. Alternate between: (a) classifier iterations (current inner loop &mdash; modify boundaries, features, weights), and (b) strategy iterations (hold classifier fixed, optimize strategy parameters per regime). The meta-harness MAB scheduler decides how much budget to allocate to each.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>RD-Agent's specific pattern:</strong> RD-Agent alternates between factor mining (your classifier) and model improvement (your strategies). The alternation is governed by the same MAB scheduler from Upgrade 2. Joint optimization yields an IC of 0.0532 and 14.21% ARR in RD-Agent's CSI 300 experiments &mdash; better than either factor-only or model-only optimization alone.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>Concrete example:</strong> Your WC strategy achieved Sharpe 14.57 in L1 Safe (IV &lt; 8.5). But are the condor widths optimal for that specific IV regime? A narrower condor in calm markets might collect more premium; a wider one might survive the occasional spike better. The inner loop currently can't explore this &mdash; it only adjusts the weight from [0, 1, 0] to [0, 1, 0.2], not the strategy internals.
+    </p>
+  </div>
+  <div class="upgrade-tags">
+    <span class="tag impact">Deeper edge extraction</span>
+    <span class="tag effort">~300 lines + strategy param API</span>
+    <span class="tag source-rd">RD-Agent(Q)</span>
+  </div>
+</div>
+
+<!-- ═══════════════ UPGRADE 5 ═══════════════ -->
+<div class="upgrade-card p5">
+  <div class="upgrade-header">
+    <div class="upgrade-num p5">5</div>
+    <div>
+      <div class="upgrade-title">Forward Paper Trade Gate</div>
+      <div class="upgrade-source">From FinRL-X &mdash; Lower Priority (but critical for production)</div>
+    </div>
+  </div>
+  <div class="upgrade-body">
+    <p>
+      <strong>The gap:</strong> Your OOS evaluation uses historical data: 2021&ndash;2023 and Feb&ndash;Mar 2026. This tells you whether the classifier <em>would have</em> generalized, but not whether it <em>will</em>. The Feb&ndash;Mar 2026 OOS Sharpe of 0.00 shows the classifier learned relationships that don't hold in the current regime &mdash; but you only discovered this after the fact.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>The fix:</strong> After the meta-harness identifies the best config, add a third evaluation stage: a 2-week forward walk (or live paper trade) on the most recent data not in any training/val/OOS set. If the classifier's regime assignments produce positive Sharpe during this window, promote to production. If not, feed the failure back into the knowledge forest and run another meta-iteration.
+    </p>
+    <p style="margin-top:12px;">
+      <strong>FinRL-X's specific pattern:</strong> FinRL-X validated its strategies through a 5-month paper trading session (Oct 2025 &ndash; Mar 2026) using Alpaca. The goal wasn't to prove alpha &mdash; it was to validate that the backtest-to-live execution pipeline was consistent: portfolio weights generated offline matched weights executed at the broker. For your system, this translates to: does the classifier's regime assignment on live data match the pattern it learned on historical data?
+    </p>
+    <p style="margin-top:12px;">
+      <strong>Implementation:</strong> Add a <code style="color:var(--pink)">paper_trade_gate.py</code> that takes the best meta-harness classifier, runs it on the most recent 10 trading days (not in any existing dataset), and checks: (a) are regime assignments plausible (not all states collapsing to one), (b) does the strategy Sharpe stay positive, and (c) are regime transitions stable (not flipping daily).
+    </p>
+  </div>
+  <div class="upgrade-tags">
+    <span class="tag impact">Production safety net</span>
+    <span class="tag effort">~150 lines + data pipeline</span>
+    <span class="tag source-fin">FinRL-X</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="part-divider"><h2>Upgraded Architecture</h2></div>
+<!-- ════════════════════════════════════════════════════════ -->
+
+<!-- ════════════════════ THREE-LOOP ARCHITECTURE ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#127922;</span> Three-Loop Architecture (After Upgrades)</div>
+  <div class="nested-arch">
+    <div class="outer-box">
+      <span class="box-label" style="color:var(--cyan)">Upgraded Meta-Harness (Outer Loop)</span>
+
+      <div class="arch-row">
+        <div class="arch-item meta">meta_config.json</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item meta">Scoring weights</div>
+        <div class="arch-item meta">Features</div>
+        <div class="arch-item meta">Splits</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-item new">MAB scheduler</div>
+        <span class="arch-arrow">&rarr; picks dimension &rarr;</span>
+        <div class="arch-item new">IC dedup gate</div>
+        <span class="arch-arrow">&rarr; filters features &rarr;</span>
+      </div>
+      <div class="arch-note">MAB adaptively allocates budget; IC gate removes redundant features before inner loop</div>
+
+      <div class="mid-box">
+        <span class="box-label" style="color:var(--purple)">Knowledge Forest (Persists)</span>
+        <div class="arch-row">
+          <div class="arch-item new">experiment_forest.json</div>
+          <span class="arch-arrow">&mdash;</span>
+          <div class="arch-item new">All hypotheses + results + reasons</div>
+        </div>
+        <div class="arch-note">Read by both loops before proposing changes &mdash; prevents re-trying known failures</div>
+      </div>
+
+      <div class="inner-box">
+        <span class="box-label">Inner Loop (Autoresearch) &mdash; unchanged</span>
+        <div class="arch-row">
+          <div class="arch-item existing">regime_experiment.py</div>
+          <span class="arch-arrow">&rarr;</span>
+          <div class="arch-item existing">IV boundaries</div>
+          <div class="arch-item existing">Features</div>
+          <div class="arch-item existing">Weights</div>
+        </div>
+        <div class="arch-note">~40 experiments per iteration &mdash; now conditioned on knowledge forest</div>
+      </div>
+
+      <div class="arch-row" style="margin-top:16px;">
+        <span class="arch-arrow">After inner loop completes:</span>
+      </div>
+      <div class="arch-row">
+        <div class="arch-item existing">Best classifier</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item data" style="border-color:var(--red); color:var(--red);">OOS holdout</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item new">Paper trade gate</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item existing">meta_results.tsv</div>
+      </div>
+      <div class="arch-note">New: forward validation gate between OOS and production promotion</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ NEW FILE MAP ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128451;</span> New &amp; Modified Files</div>
+  <div class="file-map">
+    <div class="file-entry new">
+      <div class="fname">experiment_forest.json</div>
+      <div class="fdesc">Persistent knowledge graph of all experiments across all meta-iterations. Stores hypothesis, result, keep/revert, reason, meta_config_id.</div>
+    </div>
+    <div class="file-entry new">
+      <div class="fname">forest_manager.py</div>
+      <div class="fdesc">Read/write/query the knowledge forest. Provides retrieval function for agent to find relevant prior experiments.</div>
+    </div>
+    <div class="file-entry new">
+      <div class="fname">mab_scheduler.py</div>
+      <div class="fdesc">UCB1/Thompson sampling scheduler for meta-harness dimensions. Tracks OOS deltas, allocates next iteration.</div>
+    </div>
+    <div class="file-entry new">
+      <div class="fname">ic_dedup.py</div>
+      <div class="fdesc">Pairwise Spearman correlation check on activated features. Drops features above 0.75 threshold before inner loop.</div>
+    </div>
+    <div class="file-entry new">
+      <div class="fname">paper_trade_gate.py</div>
+      <div class="fdesc">Forward-walk validation on most recent unseen data. Checks regime plausibility, Sharpe, and transition stability.</div>
+    </div>
+    <div class="file-entry modified">
+      <div class="fname">meta_harness.py</div>
+      <div class="fdesc">Modified: integrate MAB scheduler, IC dedup gate, paper trade gate, and knowledge forest logging.</div>
+    </div>
+    <div class="file-entry modified">
+      <div class="fname">inner_loop.py</div>
+      <div class="fdesc">Modified: read knowledge forest before spawning Claude subprocess. Log experiment results to forest after each run.</div>
+    </div>
+    <div class="file-entry modified">
+      <div class="fname">program_regime.md</div>
+      <div class="fdesc">Modified: add instruction to read experiment_forest.json and avoid re-trying known failures.</div>
+    </div>
+    <div class="file-entry modified">
+      <div class="fname">program_meta_harness.md</div>
+      <div class="fdesc">Modified: add instruction to use MAB allocation, read forest for meta-level patterns.</div>
+    </div>
+    <div class="file-entry modified">
+      <div class="fname">prepare_rv_meta.py</div>
+      <div class="fdesc">Modified: add IC deduplication step before returning feature set to inner loop.</div>
+    </div>
+    <div class="file-entry unchanged">
+      <div class="fname">regime_experiment.py</div>
+      <div class="fdesc">Unchanged &mdash; still the only file the inner loop modifies.</div>
+    </div>
+    <div class="file-entry unchanged">
+      <div class="fname">prepare_rv.py</div>
+      <div class="fdesc">Unchanged &mdash; still auto-delegates to prepare_rv_meta.py when meta_config.json exists.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ UPGRADED META CYCLE ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128257;</span> Upgraded Outer Loop Cycle</div>
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px;">
+    <div class="pipeline" style="flex-wrap:wrap;gap:8px;">
+      <div class="pipe-step" style="border-color:var(--cyan);">
+        <div class="step-num" style="color:var(--cyan)">1</div>
+        <div class="step-title">MAB Select</div>
+        <div class="step-desc">Pick highest-UCB dimension<br>(scoring, norms, features, splits)</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--accent);">
+        <div class="step-num" style="color:var(--accent)">2</div>
+        <div class="step-title">IC Dedup</div>
+        <div class="step-desc">Filter redundant features<br>before inner loop starts</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--green);">
+        <div class="step-num" style="color:var(--green)">3</div>
+        <div class="step-title">Inner Loop</div>
+        <div class="step-desc">Reads knowledge forest<br>~40 experiments &rarr; best classifier</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--red);">
+        <div class="step-num" style="color:var(--red)">4</div>
+        <div class="step-title">OOS Eval</div>
+        <div class="step-desc">Held-out 2021&ndash;2023<br>+ Feb&ndash;Mar 2026</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--pink);">
+        <div class="step-num" style="color:var(--pink)">5</div>
+        <div class="step-title">Paper Trade</div>
+        <div class="step-desc">2-week forward walk<br>on genuinely unseen data</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--purple);">
+        <div class="step-num" style="color:var(--purple)">6</div>
+        <div class="step-title">Log &amp; Learn</div>
+        <div class="step-desc">Update forest + MAB<br>Promote or iterate</div>
+      </div>
+    </div>
+    <p style="text-align:center; color:var(--text2); font-size:0.82rem; margin-top:16px;">
+      Steps <span style="color:var(--cyan)">1</span>, <span style="color:var(--accent)">2</span>, <span style="color:var(--pink)">5</span>, and <span style="color:var(--purple)">6</span> are new. Steps <span style="color:var(--green)">3</span> and <span style="color:var(--red)">4</span> are your existing system with knowledge forest conditioning.
+    </p>
+  </div>
+</div>
+
+<!-- ════════════════════ BEFORE / AFTER COMPARISON ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#9878;</span> Before vs. After</div>
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+    <div class="comparison-row header">
+      <div>Dimension</div>
+      <div>Current System</div>
+      <div style="color:var(--cyan)">After Upgrades</div>
+    </div>
+    <div class="comparison-row">
+      <div class="dim">Experiment memory</div>
+      <div>Stateless &mdash; resets each meta-iteration</div>
+      <div style="color:var(--cyan)">Knowledge forest persists all experiments</div>
+    </div>
+    <div class="comparison-row">
+      <div class="dim">Dimension allocation</div>
+      <div>Sequential sweeps (fixed order)</div>
+      <div style="color:var(--cyan)">MAB-adaptive (concentrates on what works)</div>
+    </div>
+    <div class="comparison-row">
+      <div class="dim">Feature quality</div>
+      <div>All activated features pass through</div>
+      <div style="color:var(--cyan)">IC dedup drops redundant signals</div>
+    </div>
+    <div class="comparison-row">
+      <div class="dim">Optimization scope</div>
+      <div>Classifier only</div>
+      <div style="color:var(--cyan)">Classifier + strategy co-optimization</div>
+    </div>
+    <div class="comparison-row">
+      <div class="dim">Validation</div>
+      <div>Historical OOS only</div>
+      <div style="color:var(--cyan)">OOS + forward paper trade gate</div>
+    </div>
+    <div class="comparison-row">
+      <div class="dim">Meta-iteration speed</div>
+      <div>20&ndash;60 min (all equal)</div>
+      <div style="color:var(--cyan)">Same per iteration, but 2&ndash;3&times; fewer needed</div>
+    </div>
+    <div class="comparison-row">
+      <div class="dim">Overnight budget</div>
+      <div>~26 configs, uniform</div>
+      <div style="color:var(--cyan)">~15&ndash;20 configs, concentrated on ROI</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ IMPLEMENTATION PRIORITY ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128202;</span> Implementation Priority &amp; Effort</div>
+  <div class="priority-bar">
+    <div class="bar-label" style="color:var(--green)">1. Knowledge Forest</div>
+    <div class="bar-fill" style="background: linear-gradient(90deg, var(--green), var(--cyan)); width:95%;"></div>
+    <div class="bar-value">~200 LOC &bull; 1 day</div>
+  </div>
+  <div class="priority-bar">
+    <div class="bar-label" style="color:var(--purple)">2. MAB Scheduler</div>
+    <div class="bar-fill" style="background: linear-gradient(90deg, var(--purple), var(--pink)); width:75%;"></div>
+    <div class="bar-value">~100 LOC &bull; 0.5 day</div>
+  </div>
+  <div class="priority-bar">
+    <div class="bar-label" style="color:var(--accent)">3. IC Deduplication</div>
+    <div class="bar-fill" style="background: linear-gradient(90deg, var(--accent), var(--purple)); width:55%;"></div>
+    <div class="bar-value">~60 LOC &bull; 2 hours</div>
+  </div>
+  <div class="priority-bar">
+    <div class="bar-label" style="color:var(--orange)">4. Co-Optimization</div>
+    <div class="bar-fill" style="background: linear-gradient(90deg, var(--orange), var(--yellow)); width:40%;"></div>
+    <div class="bar-value">~300 LOC &bull; 2 days</div>
+  </div>
+  <div class="priority-bar">
+    <div class="bar-label" style="color:var(--pink)">5. Paper Trade Gate</div>
+    <div class="bar-fill" style="background: linear-gradient(90deg, var(--pink), var(--red)); width:30%;"></div>
+    <div class="bar-value">~150 LOC &bull; 1 day</div>
+  </div>
+  <p style="color:var(--text2); font-size:0.84rem; margin-top:16px;">
+    <strong style="color:var(--text)">Recommended order:</strong> Ship upgrades 1 &amp; 2 together (knowledge forest + MAB). Run one overnight cycle. Then add 3 (IC dedup). Upgrades 4 &amp; 5 can be added incrementally once the foundation is stable.
+  </p>
+</div>
+
+<!-- ════════════════════ WHAT NOT TO BORROW ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128683;</span> What NOT to Borrow</div>
+  <div class="insight-grid">
+    <div class="insight warn">
+      <div class="insight-title">Don't take Qlib's backtesting layer</div>
+      <div class="insight-body">
+        Your <code style="color:var(--text)">prepare_rv.py</code> / <code style="color:var(--text)">prepare_rv_meta.py</code> is purpose-built for Nifty 50 options P&amp;L with real strategy mechanics. Qlib's backtester is for daily-frequency Chinese equity stock selection. Replacing yours would lose all NSE-specific logic.
+      </div>
+    </div>
+    <div class="insight warn">
+      <div class="insight-title">Don't take FinRL-X's weight-centric execution</div>
+      <div class="insight-body">
+        FinRL-X's core innovation is a unified portfolio weight vector interface for allocation across stocks. Your system doesn't allocate across securities &mdash; it classifies regimes and selects strategies. The execution paradigm doesn't transfer.
+      </div>
+    </div>
+    <div class="insight warn">
+      <div class="insight-title">Don't add LLM-based sentiment signals</div>
+      <div class="insight-body">
+        Both frameworks support LLM sentiment features. Your classifier works on realized/implied vol features, which are cleaner signals for options selling than anything an LLM would extract from news. Adding sentiment would increase complexity without improving the core vol-regime classification.
+      </div>
+    </div>
+    <div class="insight warn">
+      <div class="insight-title">Don't add reinforcement learning</div>
+      <div class="insight-body">
+        FinRL-X's DRL allocators (A2C, PPO, SAC) are powerful for portfolio optimization but overkill for a decision tree classifier with 8 terminal states. Your 3-layer tree with commit-or-revert optimization is simpler, more interpretable, and more robust than an RL policy for this problem.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ COMMANDS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128187;</span> New CLI Commands (After Upgrade)</div>
+  <div class="formula-box">
+<span class="cmt"># Adaptive sweep using MAB scheduler (replaces --sweep all)</span>
+python meta_harness.py <span class="meta">--adaptive</span> --budget <span class="num">20</span> --max-inner <span class="num">40</span>
+
+<span class="cmt"># Run with knowledge forest (default after upgrade)</span>
+python meta_harness.py <span class="meta">--adaptive</span> --forest experiment_forest.json
+
+<span class="cmt"># Check feature deduplication before running</span>
+python ic_dedup.py --features <span class="str">"IV_20d,PK_20d,VRP_5d,RV_IV_gap"</span> --threshold <span class="num">0.75</span>
+
+<span class="cmt"># Run paper trade gate on best classifier</span>
+python paper_trade_gate.py --classifier best_classifier.py --days <span class="num">10</span>
+
+<span class="cmt"># Query the knowledge forest</span>
+python forest_manager.py --query <span class="str">"boundary"</span> --top <span class="num">10</span>
+
+<span class="cmt"># View MAB statistics</span>
+python mab_scheduler.py --stats
+
+<span class="cmt"># Legacy: still works exactly as before</span>
+python meta_harness.py --sweep scoring --max-inner <span class="num">40</span>
+  </div>
+</div>
+
+</div>
+
+<div class="footer">
+  Regime Autoresearch + Meta-Harness &mdash; Upgrade Roadmap &nbsp;&bull;&nbsp; RD-Agent(Q) + FinRL-X Integration
+  <br>5 upgrades &nbsp;&bull;&nbsp; 5 new files &nbsp;&bull;&nbsp; 5 modified files &nbsp;&bull;&nbsp; ~810 total lines of new code
+  <br>Built with Claude &nbsp;&bull;&nbsp; April 2026
+</div>
+
+</body>
+</html>

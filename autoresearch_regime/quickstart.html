@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quick Start — Regime Autoresearch + Meta-Harness</title>
+<style>
+  :root {
+    --bg: #0a0e17; --surface: #111827; --surface2: #1a2332; --border: #1e2d3d;
+    --text: #e2e8f0; --text2: #94a3b8; --accent: #38bdf8; --green: #34d399;
+    --red: #f87171; --orange: #fb923c; --purple: #a78bfa; --yellow: #fbbf24;
+    --pink: #f472b6; --cyan: #22d3ee;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+
+  .hero { background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%); border-bottom:1px solid var(--border); padding:50px 40px 40px; text-align:center; position:relative; overflow:hidden; }
+  .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%,rgba(56,189,248,0.08) 0%,transparent 60%); }
+  .hero h1 { font-size:2.4rem; font-weight:700; letter-spacing:-0.03em; position:relative; background:linear-gradient(135deg,#38bdf8,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .hero .sub { color:var(--text2); font-size:1rem; margin-top:8px; position:relative; }
+
+  .container { max-width:1100px; margin:0 auto; padding:36px 24px; }
+  .section { margin-bottom:44px; }
+  .section-title { font-size:1.4rem; font-weight:600; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+  .section-title .icon { font-size:1.2rem; }
+
+  .divider { text-align:center; padding:40px 20px 28px; position:relative; }
+  .divider::before { content:''; position:absolute; left:0; right:0; top:50%; height:1px; background:linear-gradient(90deg,transparent,var(--border),transparent); }
+  .divider h2 { position:relative; display:inline-block; background:var(--bg); padding:0 20px; font-size:1rem; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color:var(--text2); }
+
+  code { font-family:'JetBrains Mono','SF Mono','Fira Code',monospace; font-size:0.82rem; background:var(--surface2); padding:2px 6px; border-radius:4px; color:var(--accent); }
+  pre { font-family:'JetBrains Mono','SF Mono',monospace; font-size:0.82rem; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:20px 24px; overflow-x:auto; line-height:1.7; color:var(--text2); margin:12px 0; }
+  pre .cmt { color:#475569; } pre .kw { color:var(--accent); } pre .num { color:var(--orange); } pre .str { color:var(--green); } pre .flag { color:var(--purple); }
+
+  .card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; position:relative; overflow:hidden; }
+  .card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+  .card.a::before { background:linear-gradient(90deg,var(--green),var(--cyan)); }
+  .card.b::before { background:linear-gradient(90deg,var(--purple),var(--pink)); }
+  .card.c::before { background:linear-gradient(90deg,var(--orange),var(--yellow)); }
+  .card .card-num { font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; font-weight:700; margin-bottom:6px; }
+  .card.a .card-num { color:var(--green); } .card.b .card-num { color:var(--purple); } .card.c .card-num { color:var(--orange); }
+  .card .card-title { font-size:1.1rem; font-weight:600; margin-bottom:8px; }
+  .card .card-body { font-size:0.88rem; color:var(--text2); line-height:1.6; }
+  .card .card-body strong { color:var(--text); }
+  .card .card-cmd { margin-top:12px; }
+
+  table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+  th { text-align:left; padding:10px 14px; background:var(--surface2); border-bottom:1px solid var(--border); font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text2); }
+  td { padding:10px 14px; border-bottom:1px solid var(--border); }
+  tr:hover td { background:rgba(56,189,248,0.03); }
+  .mono { font-family:'JetBrains Mono',monospace; font-size:0.8rem; }
+
+  .param-group { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:16px; }
+  .param-group .pg-title { font-weight:600; font-size:1rem; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+  .param-group .pg-title .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .param-row { display:grid; grid-template-columns:200px 80px 1fr; gap:8px; padding:6px 0; border-bottom:1px solid rgba(30,45,61,0.5); align-items:baseline; }
+  .param-row:last-child { border-bottom:none; }
+  .param-name { font-family:'JetBrains Mono',monospace; font-size:0.82rem; color:var(--accent); }
+  .param-default { font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--orange); text-align:center; }
+  .param-desc { font-size:0.84rem; color:var(--text2); }
+
+  .recipe { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 22px; margin-bottom:12px; }
+  .recipe .recipe-q { font-weight:600; font-size:0.95rem; margin-bottom:8px; color:var(--text); }
+
+  .arch-box { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:28px; font-family:'JetBrains Mono',monospace; font-size:0.82rem; line-height:1.8; overflow-x:auto; }
+  .arch-box .outer { color:var(--purple); } .arch-box .inner { color:var(--green); } .arch-box .data { color:var(--orange); } .arch-box .dim { color:var(--text2); }
+
+  .tag { display:inline-block; padding:3px 10px; border-radius:5px; font-size:0.72rem; font-weight:600; margin-right:6px; }
+  .tag.green { background:rgba(52,211,153,0.12); color:var(--green); border:1px solid rgba(52,211,153,0.2); }
+  .tag.purple { background:rgba(167,139,250,0.12); color:var(--purple); border:1px solid rgba(167,139,250,0.2); }
+  .tag.orange { background:rgba(251,146,60,0.12); color:var(--orange); border:1px solid rgba(251,146,60,0.2); }
+
+  .footer { text-align:center; padding:36px 20px; border-top:1px solid var(--border); color:#475569; font-size:0.75rem; }
+
+  @media (max-width:768px) { .hero h1 { font-size:1.6rem; } .container { padding:24px 16px; } .card-grid { grid-template-columns:1fr; } .param-row { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Quick Start Guide</h1>
+  <div class="sub">Regime Autoresearch + Meta-Harness &mdash; everything you need to run, configure, and monitor</div>
+</div>
+
+<div class="container">
+
+<!-- ════════════════════ 3 WAYS TO RUN ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128640;</span> 3 Ways to Run</div>
+  <div class="card-grid">
+
+    <div class="card a">
+      <div class="card-num">Option A</div>
+      <div class="card-title">Inner Loop Only</div>
+      <div class="card-body">
+        <strong>The original autoresearch.</strong> A single Claude session modifies <code>regime_experiment.py</code> in a loop &mdash; edit, commit, evaluate, keep/revert. No meta-harness, no outer loop.
+        <div class="card-cmd">
+          <span class="tag green">Claude prompt</span>
+          <pre style="margin-top:8px;">Read program_regime.md and kick off autoresearch. Tag: apr8</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="card b">
+      <div class="card-num">Option B</div>
+      <div class="card-title">Meta-Harness (Automated)</div>
+      <div class="card-body">
+        <strong>MAB-adaptive outer loop.</strong> Automatically sweeps scoring weights, norms, features, and splits. Spawns a Claude subprocess for each inner loop. Evaluates on OOS.
+        <div class="card-cmd">
+          <span class="tag purple">Terminal</span>
+          <pre style="margin-top:8px;">python meta_harness.py <span class="flag">--adaptive</span> <span class="flag">--budget</span> <span class="num">20</span> <span class="flag">--max-inner</span> <span class="num">40</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="card c">
+      <div class="card-num">Option C</div>
+      <div class="card-title">Meta-Harness (Claude-Driven)</div>
+      <div class="card-body">
+        <strong>Smarter than automated.</strong> Claude operates the outer loop &mdash; proposes configs, reads OOS results, reads execution traces, adapts strategy based on <em>why</em> things fail.
+        <div class="card-cmd">
+          <span class="tag orange">Claude prompt</span>
+          <pre style="margin-top:8px;">Read program_meta_harness.md and run the meta-harness</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ ARCHITECTURE ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#127922;</span> How the Two Loops Fit Together</div>
+  <div class="arch-box">
+<span class="outer">META-HARNESS (Outer Loop)</span>
+<span class="dim">│  You / automated script controls the frame</span>
+<span class="dim">│</span>
+<span class="dim">│  Writes</span> <span class="outer">meta_config.json</span> <span class="dim">→ scoring weights, norms, features, splits, strategy weights</span>
+<span class="dim">│</span>
+<span class="dim">│  ┌───────────────────────────────────────────────────────┐</span>
+<span class="dim">│  │</span>  <span class="inner">AUTORESEARCH (Inner Loop)</span>                            <span class="dim">│</span>
+<span class="dim">│  │</span>  <span class="inner">Claude</span> <span class="dim">modifies</span> <span class="inner">regime_experiment.py</span>                  <span class="dim">│</span>
+<span class="dim">│  │  boundaries, features, weights → ~40 experiments     │</span>
+<span class="dim">│  │  evaluates on</span> <span class="data">validation set</span> <span class="dim">(controlled by meta_config) │</span>
+<span class="dim">│  └───────────────────────────────────────────────────────┘</span>
+<span class="dim">│</span>
+<span class="dim">│  After inner loop completes:</span>
+<span class="dim">│  best classifier →</span> <span class="data" style="color:var(--red)">OOS evaluation</span> <span class="dim">→</span> <span class="outer">meta_results.tsv</span>
+<span class="dim">│</span>
+<span class="dim">│  Upgrades:</span> <span class="outer">Knowledge Forest</span> <span class="dim">|</span> <span class="outer">MAB (5 arms)</span> <span class="dim">|</span> <span class="outer">IC Dedup</span> <span class="dim">|</span> <span class="outer">Co-Optimization</span> <span class="dim">|</span> <span class="outer">Paper Trade</span>
+  </div>
+  <p style="color:var(--text2); font-size:0.84rem; margin-top:12px;">
+    The inner loop Claude <strong style="color:var(--text)">never sees OOS data</strong>. It optimizes against the scoring formula in <code>prepare_rv.py</code>. The meta-harness changes that formula between iterations, then checks if the result generalizes.
+  </p>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="divider"><h2>What You Can Configure</h2></div>
+<!-- ════════════════════════════════════════════════════════ -->
+
+<!-- ════════════════════ LEVEL 1: META CONFIG ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#9881;</span> Level 1: Scoring Formula &amp; Frame <span style="font-size:0.8rem;color:var(--purple);margin-left:6px;">meta_config.json</span></div>
+  <p style="color:var(--text2); font-size:0.9rem; margin-bottom:16px;">These control what the inner loop optimizes <em>toward</em>. The most impactful knobs in the system.</p>
+
+  <div class="param-group">
+    <div class="pg-title"><span class="dot" style="background:var(--purple)"></span> Scoring Weights <span style="font-size:0.78rem;color:var(--text2);font-weight:400;">(must sum to 1.0)</span></div>
+    <div class="param-row"><span class="param-name">w_sharpe</span><span class="param-default">0.40</span><span class="param-desc">Weight for portfolio Sharpe ratio. Higher = inner loop chases pure returns.</span></div>
+    <div class="param-row"><span class="param-name">w_safe_sep</span><span class="param-default">0.25</span><span class="param-desc">Weight for Safe vs Exposed gap. Higher = inner loop prioritizes regime discrimination.</span></div>
+    <div class="param-row"><span class="param-name">w_rank_corr</span><span class="param-default">0.20</span><span class="param-desc">Weight for train&harr;val stability. Higher = prevents overfitting to validation set.</span></div>
+    <div class="param-row"><span class="param-name">w_coverage</span><span class="param-default">0.15</span><span class="param-desc">Weight for state coverage. Penalizes if any state has &lt;5 days in validation.</span></div>
+  </div>
+
+  <div class="param-group">
+    <div class="pg-title"><span class="dot" style="background:var(--orange)"></span> Normalization Constants</div>
+    <div class="param-row"><span class="param-name">sharpe_norm</span><span class="param-default">5.0</span><span class="param-desc">Sharpe divisor. Lower (3.0) = easier target, diversifies inner loop exploration. Try 3.0&ndash;7.0.</span></div>
+    <div class="param-row"><span class="param-name">sharpe_cap</span><span class="param-default">1.5</span><span class="param-desc">Max contribution from Sharpe term. Caps extreme Sharpe from dominating.</span></div>
+    <div class="param-row"><span class="param-name">safe_sep_norm</span><span class="param-default">10.0</span><span class="param-desc">Separation divisor. Lower (6.0) = easier target. Try 6.0&ndash;15.0.</span></div>
+    <div class="param-row"><span class="param-name">safe_sep_cap</span><span class="param-default">1.0</span><span class="param-desc">Max contribution from separation term.</span></div>
+  </div>
+
+  <div class="param-group">
+    <div class="pg-title"><span class="dot" style="background:var(--cyan)"></span> Train / Validation Dates</div>
+    <div class="param-row"><span class="param-name">train_start</span><span class="param-default">2023-02-01</span><span class="param-desc">Training period start. Earlier = more data, but includes different regimes.</span></div>
+    <div class="param-row"><span class="param-name">train_end</span><span class="param-default">2025-06-30</span><span class="param-desc">Training period end.</span></div>
+    <div class="param-row"><span class="param-name">val_start</span><span class="param-default">2025-07-01</span><span class="param-desc">Validation period start. What the inner loop evaluates on.</span></div>
+    <div class="param-row"><span class="param-name">val_end</span><span class="param-default">2026-01-30</span><span class="param-desc">Validation period end.</span></div>
+  </div>
+
+  <div class="param-group">
+    <div class="pg-title"><span class="dot" style="background:var(--green)"></span> Feature Pipeline</div>
+    <div class="param-row"><span class="param-name">extra_features</span><span class="param-default">[]</span><span class="param-desc">List of extra features to make available to the inner loop.</span></div>
+    <div style="padding:8px 0; font-size:0.82rem; color:var(--text2);">
+      Available: <code>IV_20d</code> <code>PK_20d</code> <code>IV_momentum_5d</code> <code>VRP_5d</code> <code>IV_range_10d</code> <code>RV_IV_gap</code> <code>PK_IV_zscore_60d</code> <code>IV_vol_of_vol_20d</code>
+    </div>
+  </div>
+
+  <div class="param-group">
+    <div class="pg-title"><span class="dot" style="background:var(--pink)"></span> Strategy Co-Optimization <span style="font-size:0.78rem;color:var(--text2);font-weight:400;">(Upgrade 4)</span></div>
+    <div class="param-row"><span class="param-name">strategy_weights_override</span><span class="param-default">{}</span><span class="param-desc">Dict of per-state [DM,WC,Orion] weights to inject before inner loop. Empty = no override.</span></div>
+    <div class="param-row"><span class="param-name">strategy_lock</span><span class="param-default">False</span><span class="param-desc">If True, inner loop is told NOT to modify strategy weights &mdash; only optimize boundaries/features.</span></div>
+    <div style="padding:8px 0; font-size:0.82rem; color:var(--text2);">
+      Templates: <code>equal</code> <code>current_best</code> <code>wc_dominant</code> <code>orion_dominant</code> <code>regime_adaptive</code> <code>conservative</code>
+    </div>
+  </div>
+
+  <div class="param-group">
+    <div class="pg-title"><span class="dot" style="background:var(--text2)"></span> Inner Loop Budget</div>
+    <div class="param-row"><span class="param-name">max_inner_experiments</span><span class="param-default">40</span><span class="param-desc">Max experiments the inner loop Claude runs per iteration.</span></div>
+    <div class="param-row"><span class="param-name">inner_timeout_sec</span><span class="param-default">3600</span><span class="param-desc">Timeout in seconds (60 min).</span></div>
+    <div class="param-row"><span class="param-name">inner_budget_usd</span><span class="param-default">5.0</span><span class="param-desc">API cost cap per inner loop run.</span></div>
+  </div>
+
+  <pre style="margin-top:16px;">
+<span class="cmt"># Create a custom config:</span>
+python -c "
+<span class="kw">from</span> meta_config <span class="kw">import</span> MetaConfig
+MetaConfig(
+    w_sharpe=<span class="num">0.50</span>, w_safe_sep=<span class="num">0.20</span>, w_rank_corr=<span class="num">0.15</span>, w_coverage=<span class="num">0.15</span>,
+    sharpe_norm=<span class="num">4.0</span>,
+    extra_features=[<span class="str">'IV_momentum_5d'</span>, <span class="str">'VRP_5d'</span>],
+    max_inner_experiments=<span class="num">30</span>,
+    description=<span class="str">'sharpe-heavy-momentum'</span>
+).to_json(<span class="str">'meta_configs/my_config.json'</span>)
+"
+  </pre>
+</div>
+
+<!-- ════════════════════ LEVEL 2: UPGRADE SYSTEMS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128736;</span> Level 2: Upgrade Systems</div>
+  <div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
+    <div class="param-group" style="border-top:3px solid var(--green)">
+      <div class="pg-title" style="color:var(--green)">Knowledge Forest</div>
+      <div style="font-size:0.84rem;color:var(--text2);margin-bottom:10px;">Persistent memory across all runs. Inner loop reads it before starting &mdash; avoids re-trying known failures.</div>
+      <div class="param-row" style="grid-template-columns:1fr 1fr"><span class="param-name">experiment_forest.json</span><span class="param-desc">Auto-created</span></div>
+      <pre style="font-size:0.78rem;margin-top:8px;">python forest_manager.py --summary
+python forest_manager.py --query <span class="str">"boundary"</span></pre>
+    </div>
+    <div class="param-group" style="border-top:3px solid var(--purple)">
+      <div class="pg-title" style="color:var(--purple)">MAB Scheduler</div>
+      <div style="font-size:0.84rem;color:var(--text2);margin-bottom:10px;">UCB1 bandit across 5 dimensions (scoring, norms, features, splits, strategy). Concentrates budget on what moves OOS Sharpe.</div>
+      <div class="param-row" style="grid-template-columns:140px 60px 1fr"><span class="param-name">exploration_c</span><span class="param-default">1.41</span><span class="param-desc">Higher = more exploration</span></div>
+      <pre style="font-size:0.78rem;margin-top:8px;">python mab_scheduler.py --stats</pre>
+    </div>
+    <div class="param-group" style="border-top:3px solid var(--cyan)">
+      <div class="pg-title" style="color:var(--cyan)">IC Dedup Gate</div>
+      <div style="font-size:0.84rem;color:var(--text2);margin-bottom:10px;">Drops redundant features before inner loop. Pairwise Spearman &gt; threshold gets filtered.</div>
+      <div class="param-row" style="grid-template-columns:140px 60px 1fr"><span class="param-name">threshold</span><span class="param-default">0.75</span><span class="param-desc">Lower = stricter dedup</span></div>
+      <pre style="font-size:0.78rem;margin-top:8px;">python ic_dedup.py --features <span class="str">"IV_20d,PK_20d"</span> --report</pre>
+    </div>
+    <div class="param-group" style="border-top:3px solid var(--pink)">
+      <div class="pg-title" style="color:var(--pink)">Paper Trade Gate</div>
+      <div style="font-size:0.84rem;color:var(--text2);margin-bottom:10px;">Forward-walk validation on most recent unseen data. Checks Sharpe, state diversity, transition stability.</div>
+      <div class="param-row" style="grid-template-columns:140px 60px 1fr"><span class="param-name">days</span><span class="param-default">10</span><span class="param-desc">Forward-walk days</span></div>
+      <div class="param-row" style="grid-template-columns:140px 60px 1fr"><span class="param-name">min_sharpe</span><span class="param-default">-1.0</span><span class="param-desc">Minimum Sharpe to pass</span></div>
+      <div class="param-row" style="grid-template-columns:140px 60px 1fr"><span class="param-name">min_states</span><span class="param-default">2</span><span class="param-desc">Minimum distinct states</span></div>
+      <pre style="font-size:0.78rem;margin-top:8px;">python meta_harness.py --paper-trade-only --days <span class="num">10</span></pre>
+    </div>
+    <div class="param-group" style="border-top:3px solid var(--orange)">
+      <div class="pg-title" style="color:var(--orange)">Strategy Co-Opt</div>
+      <div style="font-size:0.84rem;color:var(--text2);margin-bottom:10px;">Alternates between classifier and strategy optimization. The outer loop injects fixed weights; inner loop optimizes classifier only.</div>
+      <div style="font-size:0.82rem; color:var(--text2); padding:4px 0;">6 templates: equal, current_best, wc_dominant, orion_dominant, regime_adaptive, conservative</div>
+      <pre style="font-size:0.78rem;margin-top:8px;">python meta_harness.py <span class="flag">--sweep</span> strategy <span class="flag">--max-inner</span> <span class="num">40</span>
+python strategy_coopt.py --list-templates
+python strategy_coopt.py --extract</pre>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ LEVEL 3: PROMPTS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128221;</span> Level 3: Prompt Instructions</div>
+  <p style="color:var(--text2); font-size:0.9rem; margin-bottom:16px;">These markdown files are the AI agent's instructions. Edit them to change search strategy.</p>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>File</th><th>Controls</th><th>What to Edit</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>program_regime.md</code></td>
+          <td>Inner loop agent behavior</td>
+          <td>Strategy guide (experiment priority), knowledge forest instructions, bounded mode cap</td>
+        </tr>
+        <tr>
+          <td><code>program_meta_harness.md</code></td>
+          <td>Outer loop agent behavior</td>
+          <td>Dimension priority, adaptive vs sweep mode, OOS interpretation guidelines</td>
+        </tr>
+        <tr>
+          <td><code>regime_experiment_baseline.py</code></td>
+          <td>Inner loop starting point</td>
+          <td>Copy your best classifier here &mdash; every meta-iteration resets from this</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════ LEVEL 4: CLASSIFIER ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#127919;</span> Level 4: Classifier Internals <span style="font-size:0.8rem;color:var(--green);margin-left:6px;">regime_experiment.py</span></div>
+  <p style="color:var(--text2); font-size:0.9rem; margin-bottom:16px;">These are what the inner loop Claude modifies. You can also edit them directly before a run.</p>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Parameter</th><th>Current Best</th><th>What It Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono" style="color:var(--green)">IV_L1_UPPER</td><td class="mono">8.5</td><td>Below this = L1 (low IV). Lower = more L1 days.</td></tr>
+        <tr><td class="mono" style="color:var(--green)">IV_L2_UPPER</td><td class="mono">11</td><td>Below this = L2, above = L3. Controls L2/L3 split.</td></tr>
+        <tr><td class="mono" style="color:var(--green)">SPLIT_FEATURE_L3</td><td class="mono">PK_IV_zscore_30d</td><td>Feature that splits L3 into Safe/Exposed.</td></tr>
+        <tr><td class="mono" style="color:var(--green)">L2_DIRECTION_FEATURE</td><td class="mono">IV_chg_1d</td><td>IV direction signal at L2. Threshold: -1.1.</td></tr>
+        <tr><td class="mono" style="color:var(--green)">STRATEGY_WEIGHTS</td><td class="mono">{L1 Safe: [0,1,0], ...}</td><td>Per-state [DM, WC, Orion] allocation weights.</td></tr>
+        <tr><td class="mono" style="color:var(--green)">compute_extra_features()</td><td class="mono">custom function</td><td>Add any derived features. Full Python freedom.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="divider"><h2>Commands Reference</h2></div>
+<!-- ════════════════════════════════════════════════════════ -->
+
+<!-- ════════════════════ RUNNING ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#9654;</span> Running</div>
+  <pre>
+<span class="cmt"># ── Adaptive MAB sweep (recommended) ──</span>
+python meta_harness.py <span class="flag">--adaptive</span> <span class="flag">--budget</span> <span class="num">20</span> <span class="flag">--max-inner</span> <span class="num">40</span>
+python meta_harness.py <span class="flag">--adaptive</span> <span class="flag">--budget</span> <span class="num">20</span> <span class="flag">--paper-trade</span>       <span class="cmt"># + forward validation</span>
+python meta_harness.py <span class="flag">--adaptive</span> <span class="flag">--budget</span> <span class="num">5</span> <span class="flag">--dry-run</span>             <span class="cmt"># preview, no cost</span>
+
+<span class="cmt"># ── Single dimension sweep ──</span>
+python meta_harness.py <span class="flag">--sweep</span> scoring <span class="flag">--max-inner</span> <span class="num">40</span>    <span class="cmt"># 8 weight configs</span>
+python meta_harness.py <span class="flag">--sweep</span> norms <span class="flag">--max-inner</span> <span class="num">40</span>      <span class="cmt"># 6 norm configs</span>
+python meta_harness.py <span class="flag">--sweep</span> features <span class="flag">--max-inner</span> <span class="num">40</span>   <span class="cmt"># 7 feature sets</span>
+python meta_harness.py <span class="flag">--sweep</span> splits <span class="flag">--max-inner</span> <span class="num">40</span>     <span class="cmt"># 5 date splits</span>
+python meta_harness.py <span class="flag">--sweep</span> strategy <span class="flag">--max-inner</span> <span class="num">40</span>   <span class="cmt"># 6 strategy templates (co-opt)</span>
+
+<span class="cmt"># ── Single custom config ──</span>
+python meta_harness.py <span class="flag">--config</span> meta_configs/my_config.json
+  </pre>
+</div>
+
+<!-- ════════════════════ DIAGNOSTICS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128269;</span> Diagnostics &amp; Monitoring</div>
+  <pre>
+<span class="cmt"># ── OOS baseline ──</span>
+python meta_harness.py <span class="flag">--baseline</span>
+
+<span class="cmt"># ── Paper trade gate ──</span>
+python meta_harness.py <span class="flag">--paper-trade-only</span> <span class="flag">--days</span> <span class="num">10</span>
+
+<span class="cmt"># ── Knowledge forest ──</span>
+python meta_harness.py <span class="flag">--forest-summary</span>
+python forest_manager.py <span class="flag">--query</span> <span class="str">"boundary"</span> <span class="flag">--top</span> <span class="num">10</span>
+python forest_manager.py <span class="flag">--failures</span>
+python forest_manager.py <span class="flag">--stats</span>
+
+<span class="cmt"># ── MAB scheduler ──</span>
+python meta_harness.py <span class="flag">--mab-stats</span>
+
+<span class="cmt"># ── Feature correlations ──</span>
+python ic_dedup.py <span class="flag">--features</span> <span class="str">"IV_20d,PK_20d,VRP_5d,RV_IV_gap"</span> <span class="flag">--report</span>
+
+<span class="cmt"># ── Strategy co-optimization ──</span>
+python strategy_coopt.py <span class="flag">--list-templates</span>                  <span class="cmt"># show all 6 templates</span>
+python strategy_coopt.py <span class="flag">--extract</span>                          <span class="cmt"># current weights in regime_experiment.py</span>
+python strategy_coopt.py <span class="flag">--generate</span> random                   <span class="cmt"># preview a random weight config</span>
+
+<span class="cmt"># ── Run classifier directly ──</span>
+python regime_experiment.py
+  </pre>
+</div>
+
+<!-- ════════════════════ OUTPUT FILES ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128451;</span> Output Files</div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>File</th><th>Written By</th><th>Contains</th></tr></thead>
+      <tbody>
+        <tr><td class="mono" style="color:var(--green)">results.tsv</td><td>Inner loop</td><td>Per-experiment scores. Reset each meta-iteration.</td></tr>
+        <tr><td class="mono" style="color:var(--purple)">meta_results.tsv</td><td>Outer loop</td><td>Per-iteration OOS results, dimension, paper trade status.</td></tr>
+        <tr><td class="mono" style="color:var(--purple)">meta_configs/iter_NNN.json</td><td>Outer loop</td><td>Config snapshot for each iteration.</td></tr>
+        <tr><td class="mono" style="color:var(--orange)">experiment_forest.json</td><td>Both</td><td>All experiments ever run. Persistent memory.</td></tr>
+        <tr><td class="mono" style="color:var(--orange)">mab_state.json</td><td>MAB scheduler</td><td>Arm pulls, rewards, UCB1 state.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════ RECIPES ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#127859;</span> Recipes</div>
+
+  <div class="recipe">
+    <div class="recipe-q">&ldquo;Run overnight and let the system figure it out&rdquo;</div>
+    <pre>python meta_harness.py <span class="flag">--adaptive</span> <span class="flag">--budget</span> <span class="num">30</span> <span class="flag">--max-inner</span> <span class="num">40</span> <span class="flag">--paper-trade</span></pre>
+  </div>
+
+  <div class="recipe">
+    <div class="recipe-q">&ldquo;Test if a different scoring formula generalizes better&rdquo;</div>
+    <pre>python meta_harness.py <span class="flag">--sweep</span> scoring <span class="flag">--max-inner</span> <span class="num">40</span>
+<span class="cmt"># Check: sort meta_results.tsv by oos2_sharpe</span></pre>
+  </div>
+
+  <div class="recipe">
+    <div class="recipe-q">&ldquo;Test one specific scoring config&rdquo;</div>
+    <pre>python -c "
+<span class="kw">from</span> meta_config <span class="kw">import</span> MetaConfig
+MetaConfig(w_sharpe=<span class="num">0.30</span>, w_safe_sep=<span class="num">0.30</span>, w_rank_corr=<span class="num">0.25</span>, w_coverage=<span class="num">0.15</span>,
+           description=<span class="str">'equal-sharpe-sep'</span>).to_json(<span class="str">'meta_configs/test.json'</span>)
+"
+python meta_harness.py <span class="flag">--config</span> meta_configs/test.json <span class="flag">--max-inner</span> <span class="num">30</span></pre>
+  </div>
+
+  <div class="recipe">
+    <div class="recipe-q">&ldquo;Check if adding new features helps&rdquo;</div>
+    <pre><span class="cmt"># First check correlations</span>
+python ic_dedup.py <span class="flag">--features</span> <span class="str">"IV_momentum_5d,VRP_5d,IV_range_10d"</span> <span class="flag">--report</span>
+<span class="cmt"># Then sweep</span>
+python meta_harness.py <span class="flag">--sweep</span> features <span class="flag">--max-inner</span> <span class="num">40</span></pre>
+  </div>
+
+  <div class="recipe">
+    <div class="recipe-q">&ldquo;Find the best strategy allocation for a fixed classifier&rdquo;</div>
+    <pre><span class="cmt"># Sweep all 6 strategy templates — inner loop only optimizes boundaries/features</span>
+python meta_harness.py <span class="flag">--sweep</span> strategy <span class="flag">--max-inner</span> <span class="num">40</span>
+
+<span class="cmt"># Or test one specific template</span>
+python -c "
+<span class="kw">from</span> meta_config <span class="kw">import</span> MetaConfig
+<span class="kw">from</span> strategy_coopt <span class="kw">import</span> generate_strategy_config
+MetaConfig(
+    strategy_weights_override=generate_strategy_config(<span class="str">'orion_dominant'</span>),
+    strategy_lock=True,
+    description=<span class="str">'coopt:orion'</span>
+).to_json(<span class="str">'meta_configs/coopt_test.json'</span>)
+"
+python meta_harness.py <span class="flag">--config</span> meta_configs/coopt_test.json <span class="flag">--max-inner</span> <span class="num">30</span></pre>
+  </div>
+
+  <div class="recipe">
+    <div class="recipe-q">&ldquo;Update the baseline after finding a better classifier&rdquo;</div>
+    <pre>cp regime_experiment.py regime_experiment_baseline.py</pre>
+  </div>
+
+  <div class="recipe">
+    <div class="recipe-q">&ldquo;Reset everything and start fresh&rdquo;</div>
+    <pre>rm -f meta_results.tsv experiment_forest.json mab_state.json meta_config.json
+rm -rf meta_configs/iter_*.json
+cp regime_experiment_baseline.py regime_experiment.py</pre>
+  </div>
+</div>
+
+</div>
+
+<div class="footer">
+  Regime Autoresearch + Meta-Harness &mdash; Quick Start Guide
+</div>
+
+</body>
+</html>

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Framework Deep Dive — Regime Autoresearch</title>
+<style>
+:root{--bg:#0a0e17;--s:#111827;--s2:#1a2332;--b:#1e2d3d;--t:#e2e8f0;--t2:#94a3b8;--a:#38bdf8;--g:#34d399;--r:#f87171;--o:#fb923c;--p:#a78bfa;--y:#fbbf24;--pk:#f472b6;--cy:#22d3ee;--tl:#2dd4bf}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--t);line-height:1.65}
+
+/* hero */
+.hero{background:linear-gradient(135deg,#0f172a,#1a1040,#0f172a);border-bottom:1px solid var(--b);padding:70px 40px 55px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(56,189,248,.07) 0%,transparent 60%)}
+.hero h1{font-size:2.6rem;font-weight:700;letter-spacing:-.03em;position:relative;background:linear-gradient(135deg,#38bdf8,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero .sub{color:var(--t2);font-size:1.05rem;margin-top:10px;position:relative;max-width:720px;display:inline-block}
+
+/* layout */
+.container{max-width:1100px;margin:0 auto;padding:40px 24px}
+.section{margin-bottom:56px}
+h2{font-size:1.55rem;font-weight:700;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--b)}
+h3{font-size:1.15rem;font-weight:600;margin:24px 0 12px}
+.lead{color:var(--t2);font-size:.95rem;max-width:850px;line-height:1.75;margin-bottom:20px}
+.lead strong{color:var(--t)}
+
+/* divider */
+.dv{text-align:center;padding:48px 20px 28px;position:relative}
+.dv::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,var(--b),transparent)}
+.dv span{position:relative;display:inline-block;background:var(--bg);padding:0 20px;font-size:.95rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--t2)}
+
+/* cards */
+.cg{display:grid;gap:16px}
+.cg2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.cg3{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.cd{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:24px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.cd:hover{transform:translateY(-2px);box-shadow:0 0 24px rgba(56,189,248,.06)}
+.cd::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.cd .cl{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:6px}
+.cd .ct{font-size:1.05rem;font-weight:600;margin-bottom:8px}
+.cd .cb{font-size:.86rem;color:var(--t2);line-height:1.6}
+.cd .cb strong{color:var(--t)}
+
+/* code */
+code{font-family:'JetBrains Mono','SF Mono',monospace;font-size:.82rem;background:var(--s2);padding:2px 6px;border-radius:4px;color:var(--a)}
+pre{font-family:'JetBrains Mono',monospace;font-size:.82rem;background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:20px 24px;overflow-x:auto;line-height:1.7;color:var(--t2);margin:14px 0}
+pre b{color:var(--a);font-weight:400} pre i{color:var(--p);font-style:normal} pre em{color:var(--o);font-style:normal} pre s{color:#475569;text-decoration:none} pre u{color:var(--g);text-decoration:none}
+
+/* analogy */
+.ay{background:linear-gradient(135deg,rgba(56,189,248,.04),rgba(167,139,250,.04));border:1px solid rgba(56,189,248,.15);border-radius:12px;padding:20px 24px;margin:16px 0}
+.ay .at{font-weight:600;font-size:.92rem;margin-bottom:5px;color:var(--a)}
+.ay .ab{font-size:.86rem;color:var(--t2);line-height:1.65}
+
+/* flow */
+.aw{background:var(--s);border:1px solid var(--b);border-radius:14px;padding:32px 28px;overflow:hidden}
+.flow{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.node{padding:12px 18px;border-radius:10px;font-size:.84rem;font-weight:600;text-align:center;min-width:100px;position:relative}
+.node .sub{font-size:.68rem;font-weight:400;color:var(--t2);display:block;margin-top:3px}
+.arr{font-size:1.1rem;color:var(--b);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* nested boxes */
+.outer{border:2px solid var(--p);border-radius:14px;padding:28px;position:relative;margin:20px 0}
+.outer>.lb{position:absolute;top:-13px;left:20px;background:var(--s);padding:0 10px;font-size:.82rem;font-weight:700;color:var(--p);text-transform:uppercase;letter-spacing:.08em}
+.mid{border:2px dashed var(--cy);border-radius:10px;padding:20px;margin:16px 0;position:relative}
+.mid>.lb{position:absolute;top:-13px;left:20px;background:var(--s);padding:0 10px;font-size:.78rem;font-weight:700;color:var(--cy);text-transform:uppercase;letter-spacing:.08em}
+.inner{border:2px solid var(--g);border-radius:10px;padding:20px;margin:16px 0;position:relative}
+.inner>.lb{position:absolute;top:-13px;left:20px;background:var(--s);padding:0 10px;font-size:.82rem;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.08em}
+.row{display:flex;gap:10px;align-items:center;margin:8px 0;flex-wrap:wrap}
+.chip{background:var(--s2);border:1px solid var(--b);border-radius:8px;padding:8px 14px;font-size:.82rem}
+.note{font-size:.78rem;color:var(--t2);margin-top:4px}
+
+/* upgrade card - tall */
+.uc{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:28px;margin-bottom:24px;position:relative;overflow:hidden;transition:transform .2s}
+.uc:hover{transform:translateY(-2px)}
+.uc .uh{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.uc .un{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;flex-shrink:0}
+.uc .ut{font-size:1.15rem;font-weight:600}
+.uc .us{font-size:.78rem;color:var(--t2);margin-top:2px}
+.uc .ub{font-size:.9rem;color:var(--t2);line-height:1.65}
+.uc .ub strong{color:var(--t)}
+
+/* live pulse */
+.live{position:relative}
+.live::after{content:'';position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--g);animation:lp 1.5s infinite}
+@keyframes lp{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:.86rem}
+th{text-align:left;padding:10px 14px;background:var(--s2);border-bottom:1px solid var(--b);font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--t2)}
+td{padding:10px 14px;border-bottom:1px solid var(--b)}
+tr:hover td{background:rgba(56,189,248,.02)}
+.mono{font-family:'JetBrains Mono',monospace;font-size:.8rem}
+
+/* timeline */
+.tl{position:relative;padding-left:32px}
+.tl::before{content:'';position:absolute;left:10px;top:0;bottom:0;width:2px;background:var(--b)}
+.tli{position:relative;margin-bottom:24px}
+.tli::before{content:'';position:absolute;left:-26px;top:6px;width:14px;height:14px;border-radius:50%;border:2px solid var(--g);background:var(--bg)}
+.tli.w::before{border-color:var(--r)}
+.tln{font-family:monospace;font-weight:700;font-size:.92rem}
+.tld{font-size:.86rem;color:var(--t2);margin-top:3px}
+
+.footer{text-align:center;padding:40px 20px;border-top:1px solid var(--b);color:#475569;font-size:.75rem}
+@media(max-width:768px){.hero h1{font-size:1.7rem}.container{padding:24px 16px}.cg2,.cg3{grid-template-columns:1fr}.flow{flex-direction:column}.arr{transform:rotate(90deg)}}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>The Complete Framework</h1>
+  <div class="sub">How 5 intelligent systems work together to find options strategies that survive unseen markets &mdash; explained from first principles.</div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>The Problem</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>What Are We Solving?</h2>
+  <p class="lead">
+    You sell options on Nifty 50 using three strategies: <strong style="color:var(--o)">DM</strong>, <strong style="color:var(--a)">WC</strong>, and <strong style="color:var(--p)">Orion</strong>. Each performs differently depending on market volatility. The system classifies every trading day into one of <strong>8 regime states</strong> and allocates capital accordingly.
+  </p>
+  <p class="lead">
+    The core challenge: a classifier that scores 0.926 on validation data scored <strong style="color:var(--r)">Sharpe 0.00 on the most recent out-of-sample data</strong>. It optimized perfectly for the wrong target. We need a system that finds classifiers that <em>actually generalize</em>.
+  </p>
+
+  <div class="ay">
+    <div class="at">The Restaurant Analogy</div>
+    <div class="ab">
+      Three chefs. Chef WC makes amazing food in calm kitchens but burns everything in chaos. Chef Orion thrives in chaos. You need a system that reads the kitchen vibe, picks the right chef, <strong style="color:var(--t)">and keeps working when the menu changes</strong>. Five intelligent systems make this happen.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>The 5 Systems</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>5 Systems That Make It Work</h2>
+  <p class="lead">
+    Each system solves a specific problem. Together they form an autonomous research engine that learns from its own mistakes, allocates effort intelligently, avoids redundant work, optimizes multiple things at once, and validates before deploying.
+  </p>
+
+  <!-- ── System 1 ── -->
+  <div class="uc" style="border-left:4px solid var(--g)">
+    <div class="uh">
+      <div class="un" style="background:rgba(52,211,153,.15);color:var(--g);border:1px solid rgba(52,211,153,.3)">1</div>
+      <div><div class="ut">Knowledge Forest</div><div class="us">&ldquo;Don't make the same mistake twice&rdquo;</div></div>
+    </div>
+    <div class="ub">
+      <p><strong>The problem:</strong> Every time the system runs a new optimization cycle, it starts fresh. It doesn't remember that adaptive boundaries failed 8 times, or that WC dominates in calm markets. It re-discovers (and re-discards) the same ideas.</p>
+      <p style="margin-top:10px;"><strong>The solution:</strong> A persistent JSON database (<code>experiment_forest.json</code>) that logs every experiment ever run: what was tried, what happened, why it helped or hurt. Before each new cycle, a summary is injected into the AI agent's prompt. The agent reads: <em>&ldquo;Adaptive boundaries failed 8 times &mdash; rank stability collapses. Don't try this.&rdquo;</em></p>
+      <p style="margin-top:10px;"><strong>Key features:</strong> SOTA tracking (best config ever), dimension success rates (which types of changes work), failure history (what to avoid), keyword search.</p>
+    </div>
+    <div class="ay" style="margin-bottom:0">
+      <div class="at">Analogy</div>
+      <div class="ab">A company wiki. New engineers don't repeat failed experiments because they can read what previous teams already tried. The institutional memory compounds over time.</div>
+    </div>
+  </div>
+
+  <!-- ── System 2 ── -->
+  <div class="uc" style="border-left:4px solid var(--p)">
+    <div class="uh">
+      <div class="un" style="background:rgba(167,139,250,.15);color:var(--p);border:1px solid rgba(167,139,250,.3)">2</div>
+      <div><div class="ut">MAB Scheduler</div><div class="us">&ldquo;Spend time where it matters&rdquo;</div></div>
+    </div>
+    <div class="ub">
+      <p><strong>The problem:</strong> The system can explore 5 different dimensions: scoring weights, normalization, features, train/val splits, strategy allocations. Running all 32 possible configs uniformly wastes hours on dimensions that don't improve generalization.</p>
+      <p style="margin-top:10px;"><strong>The solution:</strong> A UCB1 multi-armed bandit treats each dimension as a slot machine arm. After each iteration, it records how much the out-of-sample Sharpe improved. Arms that consistently produce improvement get more pulls. Under-explored arms get occasional pulls to check if they've become useful.</p>
+      <p style="margin-top:10px;"><strong>Formula:</strong> <code>score = mean_reward + 1.41 &times; sqrt(ln(total_pulls) / arm_pulls)</code></p>
+    </div>
+    <div class="ay" style="margin-bottom:0">
+      <div class="at">Analogy</div>
+      <div class="ab">Like a VC allocating across funds. You put more capital into the fund with the best track record, but keep a small position in new funds in case they surprise you. The exploration constant (1.41) controls how adventurous you are.</div>
+    </div>
+  </div>
+
+  <!-- ── System 3 ── -->
+  <div class="uc" style="border-left:4px solid var(--cy)">
+    <div class="uh">
+      <div class="un" style="background:rgba(34,211,238,.15);color:var(--cy);border:1px solid rgba(34,211,238,.3)">3</div>
+      <div><div class="ut">IC Deduplication Gate</div><div class="us">&ldquo;Don't give the optimizer redundant tools&rdquo;</div></div>
+    </div>
+    <div class="ub">
+      <p><strong>The problem:</strong> The feature registry has 8 signals the optimizer can use. But <code>IV_20d</code> (20-day IV average) and <code>PK_20d</code> (20-day Parkinson vol) measure nearly the same thing. If both are activated, the optimizer might split the classification tree on both, mistaking noise in their difference for real signal.</p>
+      <p style="margin-top:10px;"><strong>The solution:</strong> Before each optimization cycle, compute pairwise Spearman rank correlation between all activated features on training data. Any feature with |correlation| &gt; 0.75 to an already-kept feature gets dropped. The optimizer only sees orthogonal signals.</p>
+    </div>
+    <div class="ay" style="margin-bottom:0">
+      <div class="at">Analogy</div>
+      <div class="ab">Removing duplicate books from a library shelf. Having &ldquo;Cooking with Pasta&rdquo; and &ldquo;Pasta Cooking Guide&rdquo; doesn't give the librarian twice the knowledge &mdash; it wastes shelf space and creates confusion.</div>
+    </div>
+  </div>
+
+  <!-- ── System 4 ── -->
+  <div class="uc" style="border-left:4px solid var(--y)">
+    <div class="uh">
+      <div class="un" style="background:rgba(251,191,36,.15);color:var(--y);border:1px solid rgba(251,191,36,.3)">4</div>
+      <div><div class="ut">Strategy Co-Optimization</div><div class="us">&ldquo;Separate who classifies from who allocates&rdquo;</div></div>
+    </div>
+    <div class="ub">
+      <p><strong>The problem:</strong> Normally the optimizer changes both the classifier (what state are we in?) AND the strategy weights (how much of each strategy?) at the same time. This creates a tangled search space where it's hard to tell if a good result came from better classification or better allocation.</p>
+      <p style="margin-top:10px;"><strong>The solution:</strong> Alternate between modes. In &ldquo;strategy mode&rdquo;, the system locks strategy weights to a curated template (6 available: equal, WC-dominant, Orion-dominant, etc.) and the optimizer only tunes the classifier. In &ldquo;classifier mode&rdquo;, weights are free. The MAB scheduler decides when to use each mode.</p>
+    </div>
+    <div class="ay" style="margin-bottom:0">
+      <div class="at">Analogy</div>
+      <div class="ab">Tuning a race car. You don't adjust the engine and the suspension simultaneously &mdash; you fix one, optimize the other, then alternate. The result is better than changing everything at once.</div>
+    </div>
+  </div>
+
+  <!-- ── System 5 ── -->
+  <div class="uc" style="border-left:4px solid var(--pk)">
+    <div class="uh">
+      <div class="un" style="background:rgba(244,114,182,.15);color:var(--pk);border:1px solid rgba(244,114,182,.3)">5</div>
+      <div><div class="ut">Paper Trade Gate</div><div class="us">&ldquo;Prove it works on tomorrow, not yesterday&rdquo;</div></div>
+    </div>
+    <div class="ub">
+      <p><strong>The problem:</strong> All evaluation uses historical data. A classifier that &ldquo;would have worked&rdquo; on 2021&ndash;2023 data doesn't guarantee it will work next week. The 0.926 classifier proved this: great on historical holdout, Sharpe 0.00 on the most recent data.</p>
+      <p style="margin-top:10px;"><strong>The solution:</strong> After passing OOS evaluation, run a forward-walk on the <em>most recent unseen trading days</em>. Check three things: (1) Sharpe is acceptable, (2) at least 2 states are used (classifier isn't collapsed), (3) transitions are stable (not flipping every day). Returns: <span style="color:var(--g)">PROMOTE</span>, <span style="color:var(--y)">ITERATE</span>, or <span style="color:var(--r)">REJECT</span>.</p>
+    </div>
+    <div class="ay" style="margin-bottom:0">
+      <div class="at">Analogy</div>
+      <div class="ab">Like a drug trial. Phase 1&ndash;2 use historical data. Phase 3 is the live trial on current patients. You don't approve the drug until Phase 3 passes, no matter how good Phases 1&ndash;2 looked.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>How They Wire Together</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>The Execution Engine: Two Nested Loops</h2>
+  <p class="lead">
+    The 5 systems need an execution engine. That's the <strong>two-loop architecture</strong>: an inner loop (the AI optimizer) wrapped by an outer loop (the system that controls what the optimizer optimizes <em>toward</em>).
+  </p>
+
+  <div class="aw">
+    <div class="outer">
+      <span class="lb">Outer Loop (Meta-Harness)</span>
+
+      <div class="row">
+        <div class="chip" style="border-color:var(--p);color:var(--p)">meta_config.json</div>
+        <span class="arr">&rarr;</span>
+        <div class="chip" style="border-color:var(--p);color:var(--p)">Scoring weights</div>
+        <div class="chip" style="border-color:var(--p);color:var(--p)">Features</div>
+        <div class="chip" style="border-color:var(--p);color:var(--p)">Splits</div>
+        <div class="chip" style="border-color:var(--y);color:var(--y)">Strategy</div>
+      </div>
+
+      <div class="mid">
+        <span class="lb">5 Systems Active</span>
+        <div class="row">
+          <div class="chip" style="border-color:var(--p);color:var(--p)">&#9313; MAB picks dimension</div>
+          <span class="arr">&rarr;</span>
+          <div class="chip" style="border-color:var(--cy);color:var(--cy)">&#9314; IC Dedup filters</div>
+          <span class="arr">&rarr;</span>
+          <div class="chip" style="border-color:var(--g);color:var(--g)">&#9312; Forest injects memory</div>
+        </div>
+      </div>
+
+      <div class="inner live">
+        <span class="lb">Inner Loop (Autoresearch)</span>
+        <div class="row">
+          <div class="chip" style="border-color:var(--g);color:var(--g)">regime_experiment.py</div>
+          <span class="arr">&rarr;</span>
+          <div class="chip">Boundaries</div>
+          <div class="chip">Features</div>
+          <div class="chip">Weights</div>
+        </div>
+        <div class="note">AI agent runs ~40 experiments: edit &rarr; commit &rarr; run &rarr; score &rarr; keep/revert</div>
+        <div class="note">Reads knowledge forest to avoid known failures. &#9315; Co-opt may lock strategy weights.</div>
+      </div>
+
+      <div style="margin-top:18px;">
+        <div class="row">
+          <div class="chip" style="border-color:var(--g);color:var(--g)">Best classifier</div>
+          <span class="arr">&rarr;</span>
+          <div class="chip" style="border-color:var(--r);color:var(--r)">OOS Eval</div>
+          <span class="arr">&rarr;</span>
+          <div class="chip" style="border-color:var(--pk);color:var(--pk)">&#9316; Paper Trade Gate</div>
+          <span class="arr">&rarr;</span>
+          <div class="chip" style="border-color:var(--p);color:var(--p)">meta_results.tsv</div>
+        </div>
+        <div class="note">OOS data is <strong style="color:var(--t)">never seen</strong> by the inner loop. Paper Trade validates on forward-walk before promotion.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cg cg2" style="margin-top:24px;">
+    <div class="cd" style="border-top:3px solid var(--g)">
+      <div class="cl" style="color:var(--g)">Inner Loop = The Chef</div>
+      <div class="ct">Autoresearch</div>
+      <div class="cb">An AI agent that experiments with the classifier: IV boundaries, features, weights. It <strong>optimizes the recipe</strong> to maximize the scoring formula. Runs ~40 experiments per cycle in ~20 min.</div>
+    </div>
+    <div class="cd" style="border-top:3px solid var(--p)">
+      <div class="cl" style="color:var(--p)">Outer Loop = The Judge</div>
+      <div class="ct">Meta-Harness</div>
+      <div class="cb">Controls what the chef optimizes <em>toward</em>: the scoring formula, features, splits, strategy weights. It <strong>optimizes the rules</strong>. Evaluates results on data the chef never sees.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>The Full Cycle</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>One Complete Iteration (6 Steps)</h2>
+  <p class="lead">Every iteration follows this sequence. The 5 systems are integrated at each stage.</p>
+
+  <div class="aw" style="padding:24px;">
+    <div class="flow">
+      <div class="node" style="background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);color:var(--p)">
+        <strong>1</strong> MAB Select<span class="sub">System &#9313; picks dimension</span>
+      </div>
+      <div class="arr">&rarr;</div>
+      <div class="node" style="background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);color:var(--cy)">
+        <strong>2</strong> IC Dedup<span class="sub">System &#9314; filters features</span>
+      </div>
+      <div class="arr">&rarr;</div>
+      <div class="node live" style="background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);color:var(--g)">
+        <strong>3</strong> Inner Loop<span class="sub">System &#9312; provides memory<br>System &#9315; may lock weights</span>
+      </div>
+      <div class="arr">&rarr;</div>
+      <div class="node" style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);color:var(--r)">
+        <strong>4</strong> OOS Eval<span class="sub">2021&ndash;2023 + 2026</span>
+      </div>
+      <div class="arr">&rarr;</div>
+      <div class="node" style="background:rgba(244,114,182,.1);border:1px solid rgba(244,114,182,.3);color:var(--pk)">
+        <strong>5</strong> Paper Trade<span class="sub">System &#9316; forward-walk</span>
+      </div>
+      <div class="arr">&rarr;</div>
+      <div class="node" style="background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);color:var(--t)">
+        <strong>6</strong> Log &amp; Learn<span class="sub">Update forest + MAB</span>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--t2);font-size:.82rem;margin-top:14px;">
+      Each iteration: 20&ndash;60 min. The MAB concentrates budget on whichever dimension produces the best OOS improvement.
+    </p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>The Classification Engine</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>How Days Get Classified</h2>
+  <p class="lead">The classifier at the heart of the system is a 3-layer decision tree that turns today's volatility conditions into one of 8 states:</p>
+
+  <div class="aw">
+    <div style="text-align:center;margin-bottom:16px;">
+      <div class="node" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--a);display:inline-block">
+        Today's Implied Volatility<span class="sub">How expensive are options right now?</span>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:.78rem;color:var(--t2);margin:10px 0">&#9660; Layer 1: Volatility level</div>
+    <div class="flow" style="margin-bottom:14px;">
+      <div class="node" style="background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);color:var(--p)">L1: Calm<span class="sub">IV &lt; 8.5%</span></div>
+      <div class="node" style="background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);color:var(--p)">L2: Normal<span class="sub">8.5% &le; IV &lt; 11%</span></div>
+      <div class="node" style="background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);color:var(--p)">L3: Stormy<span class="sub">IV &ge; 11%</span></div>
+    </div>
+    <div style="text-align:center;font-size:.78rem;color:var(--t2);margin:10px 0">&#9660; Layer 2: Safe or exposed? (PK/IV ratio, z-scores, IV direction)</div>
+    <div class="flow">
+      <div class="node" style="background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:var(--g);min-width:75px;font-size:.76rem">L1 Safe</div>
+      <div class="node" style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);color:var(--r);min-width:75px;font-size:.76rem">L1 Exposed</div>
+      <div class="node" style="background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:var(--g);min-width:75px;font-size:.76rem">L2 Safe</div>
+      <div class="node" style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);color:var(--y);min-width:75px;font-size:.76rem">L2 Caut-A</div>
+      <div class="node" style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);color:var(--y);min-width:75px;font-size:.76rem">L2 Caut-B</div>
+      <div class="node" style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);color:var(--r);min-width:75px;font-size:.76rem">L2 Risky</div>
+      <div class="node" style="background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);color:var(--g);min-width:75px;font-size:.76rem">L3 Safe</div>
+      <div class="node" style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);color:var(--r);min-width:75px;font-size:.76rem">L3 Exposed</div>
+    </div>
+    <p style="text-align:center;color:var(--t2);font-size:.8rem;margin-top:14px;">
+      Each state gets a different <strong style="color:var(--t)">[DM, WC, Orion]</strong> weight. Example: L1 Safe = <span style="color:var(--a)">[0, 1, 0]</span> &mdash; 100% Wide Condor.
+    </p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>The Scoring Formula</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>What Gets Optimized</h2>
+  <p class="lead">The inner loop maximizes a composite score. The outer loop controls the <span style="color:var(--p)">purple parameters</span>:</p>
+  <pre>
+<b>composite</b> = <i>w_sharpe</i> &times; min(val_sharpe / <i>sharpe_norm</i>, <i>sharpe_cap</i>)    <s>// How good are the returns?</s>
+         + <i>w_safe_sep</i> &times; min(safe_sep / <i>safe_sep_norm</i>, <i>safe_sep_cap</i>)  <s>// Do Safe states beat Exposed?</s>
+         + <i>w_rank_corr</i> &times; max(rank_corr, 0)                          <s>// Does train ordering match val?</s>
+         + <i>w_coverage</i> &times; coverage                                     <s>// Are all 8 states populated?</s>
+
+<s>// Defaults: w=[0.40, 0.25, 0.20, 0.15], sharpe_norm=5.0, safe_sep_norm=10.0</s>
+<s>// The outer loop changes these between iterations — different weights = different classifiers</s>
+  </pre>
+
+  <div class="ay">
+    <div class="at">Why this matters</div>
+    <div class="ab">If you give 40% weight to Sharpe and 25% to separation, the optimizer finds a classifier that chases returns. Change to 25% Sharpe and 40% separation, and it finds one that discriminates regimes better but with lower returns. <strong style="color:var(--t)">The optimal balance is what produces classifiers that generalize to unseen data</strong> &mdash; and finding that balance is the outer loop's entire job.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>Data Isolation</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>Who Sees What Data</h2>
+  <p class="lead">The structural isolation of data is what makes the whole system trustworthy. No information leaks.</p>
+
+  <div class="aw">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center;">
+      <div>
+        <div style="font-size:.78rem;color:var(--a);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Training</div>
+        <div style="font-size:.82rem;color:var(--t2)">Feb 2023 &ndash; Jun 2025</div>
+        <div style="font-size:.78rem;color:var(--t2)">~594 days</div>
+        <div style="font-size:.72rem;color:var(--g);margin-top:4px">Inner loop trains on this</div>
+      </div>
+      <div>
+        <div style="font-size:.78rem;color:var(--p);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Validation</div>
+        <div style="font-size:.82rem;color:var(--t2)">Jul 2025 &ndash; Jan 2026</div>
+        <div style="font-size:.78rem;color:var(--t2)">~143 days</div>
+        <div style="font-size:.72rem;color:var(--g);margin-top:4px">Inner loop scores against this</div>
+      </div>
+      <div>
+        <div style="font-size:.78rem;color:var(--r);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">OOS Holdout</div>
+        <div style="font-size:.82rem;color:var(--t2)">Jan 2021 &ndash; Jan 2023<br>+ Feb &ndash; Mar 2026</div>
+        <div style="font-size:.78rem;color:var(--t2)">~550 days</div>
+        <div style="font-size:.72rem;color:var(--r);margin-top:4px">Only outer loop + paper trade</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>Key Discoveries</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>What the System Found</h2>
+  <div class="tl">
+    <div class="tli"><div class="tln" style="color:var(--g)">WC crushes in calm markets</div><div class="tld">L1 Safe = pure WC [0,1,0] produced Sharpe 14.57. In low-IV, wide condor wings are rarely threatened. This single insight accounted for ~50% of total score improvement.</div></div>
+    <div class="tli"><div class="tln" style="color:var(--g)">Boundaries [8.5, 11] beat [12, 17]</div><div class="tld">Compressing boundaries spreads days across all 8 states. Coverage jumped from 0.2 to 1.0. The original boundaries starved L2/L3 of data.</div></div>
+    <div class="tli"><div class="tln" style="color:var(--g)">Z-score beats raw ratio for L3</div><div class="tld">PK_IV_zscore_30d captures how unusual the current ratio is relative to history. Perfect rank stability (1.0).</div></div>
+    <div class="tli w"><div class="tln" style="color:var(--r)">Validation &ne; Generalization</div><div class="tld">0.926 on validation, Sharpe 0.00 on Feb&ndash;Mar 2026. The classifier overfit the scoring formula. This is what the 5 systems are designed to fix.</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>Files &amp; Wiring</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>Complete File Map</h2>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>File</th><th>System</th><th>What It Does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono" style="color:var(--g)">regime_experiment.py</td><td>Inner loop</td><td>The classifier: boundaries, features, weights. AI agent modifies this.</td></tr>
+        <tr><td class="mono" style="color:var(--p)">meta_config.json</td><td>Outer loop</td><td>Active config: scoring weights, norms, features, splits, strategy override.</td></tr>
+        <tr><td class="mono" style="color:var(--g)">forest_manager.py</td><td style="color:var(--g)">System 1</td><td>Knowledge Forest: persistent memory, query, SOTA tracking.</td></tr>
+        <tr><td class="mono" style="color:var(--p)">mab_scheduler.py</td><td style="color:var(--p)">System 2</td><td>UCB1 bandit across 5 dimensions. Allocates budget adaptively.</td></tr>
+        <tr><td class="mono" style="color:var(--cy)">ic_dedup.py</td><td style="color:var(--cy)">System 3</td><td>Pairwise Spearman correlation. Drops redundant features.</td></tr>
+        <tr><td class="mono" style="color:var(--y)">strategy_coopt.py</td><td style="color:var(--y)">System 4</td><td>6 strategy templates. Weight injection + lock mode.</td></tr>
+        <tr><td class="mono" style="color:var(--pk)">paper_trade_gate.py</td><td style="color:var(--pk)">System 5</td><td>Forward-walk: PROMOTE / ITERATE / REJECT.</td></tr>
+        <tr><td class="mono" style="color:var(--p)">meta_harness.py</td><td>Engine</td><td>Outer loop orchestrator. Wires all 5 systems together.</td></tr>
+        <tr><td class="mono" style="color:var(--p)">inner_loop.py</td><td>Engine</td><td>Spawns Claude subprocess, injects forest, parses results.</td></tr>
+        <tr><td class="mono" style="color:var(--t2)">prepare_rv.py</td><td>Engine</td><td>Evaluation harness. Auto-delegates to parameterized version when meta_config exists.</td></tr>
+        <tr><td class="mono" style="color:var(--o)">experiment_forest.json</td><td>Data</td><td>All experiments ever. Persistent across all iterations.</td></tr>
+        <tr><td class="mono" style="color:var(--o)">mab_state.json</td><td>Data</td><td>MAB arm counts, rewards, UCB1 state.</td></tr>
+        <tr><td class="mono" style="color:var(--p)">meta_results.tsv</td><td>Data</td><td>OOS results for each outer-loop iteration.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<div class="dv"><span>Running It</span></div>
+<!-- ═══════════════════════════════════════ -->
+
+<div class="section">
+  <h2>How to Start</h2>
+  <div class="cg cg2" style="margin-bottom:20px;">
+    <div class="cd" style="border-top:3px solid var(--g)">
+      <div class="ct">Inner Loop Only</div>
+      <div class="cb">Tell Claude Code:</div>
+      <pre style="margin-top:8px">Read program_regime.md and kick off autoresearch. Tag: apr8</pre>
+    </div>
+    <div class="cd" style="border-top:3px solid var(--p)">
+      <div class="ct">Full System (5 Systems Active)</div>
+      <pre style="margin-top:8px">python meta_harness.py <i>--adaptive</i> <i>--budget</i> <em>20</em> <i>--max-inner</i> <em>40</em> <i>--paper-trade</i></pre>
+    </div>
+  </div>
+  <pre>
+<s># Monitor</s>
+python meta_harness.py <i>--mab-stats</i>             <s># which dimensions are working</s>
+python meta_harness.py <i>--forest-summary</i>        <s># what has been learned</s>
+python meta_harness.py <i>--baseline</i>              <s># current OOS performance</s>
+python meta_harness.py <i>--paper-trade-only</i>      <s># forward validation</s>
+python strategy_coopt.py <i>--list-templates</i>      <s># strategy profiles</s>
+  </pre>
+</div>
+
+</div>
+
+<div class="footer">
+  Regime Autoresearch &mdash; 5 systems &bull; 2 loops &bull; 8 states &bull; 3 strategies
+</div>
+
+</body>
+</html>

@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regime Autoresearch + Meta-Harness</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2332;
+    --border: #1e2d3d;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --accent: #38bdf8;
+    --green: #34d399;
+    --red: #f87171;
+    --orange: #fb923c;
+    --purple: #a78bfa;
+    --yellow: #fbbf24;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+
+  /* ─── Hero ─── */
+  .hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 40px 50px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(56,189,248,0.08) 0%, transparent 60%);
+  }
+  .hero h1 {
+    font-size: 2.8rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    position: relative;
+    background: linear-gradient(135deg, #38bdf8, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero .subtitle {
+    color: var(--text2);
+    font-size: 1.15rem;
+    margin-top: 12px;
+    position: relative;
+  }
+  .hero .badges { display: flex; justify-content: center; gap: 16px; margin-top: 28px; flex-wrap: wrap; position: relative; }
+  .hero .score-badge {
+    display: inline-block;
+    padding: 14px 30px;
+    border-radius: 12px;
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+  .hero .score-badge .label { font-size: 0.75rem; color: var(--text2); display: block; margin-bottom: 4px; font-weight: 400; }
+  .badge-inner { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.3); color: var(--green); }
+  .badge-outer { background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.3); color: var(--purple); }
+
+  /* ─── Container ─── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+
+  /* ─── Section ─── */
+  .section { margin-bottom: 48px; }
+  .section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .icon { font-size: 1.3rem; }
+
+  /* ─── Divider ─── */
+  .part-divider {
+    text-align: center;
+    padding: 48px 20px 32px;
+    position: relative;
+  }
+  .part-divider::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+  .part-divider h2 {
+    position: relative;
+    display: inline-block;
+    background: var(--bg);
+    padding: 0 24px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text2);
+  }
+
+  /* ─── Cards ─── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .card .card-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text2); margin-bottom: 6px; }
+  .card .card-value { font-size: 2rem; font-weight: 700; }
+  .card .card-detail { font-size: 0.85rem; color: var(--text2); margin-top: 4px; }
+  .card.green .card-value { color: var(--green); }
+  .card.blue .card-value { color: var(--accent); }
+  .card.purple .card-value { color: var(--purple); }
+  .card.orange .card-value { color: var(--orange); }
+
+  /* ─── Diagram ─── */
+  .diagram-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    overflow-x: auto;
+  }
+  .tree { display: flex; flex-direction: column; align-items: center; gap: 20px; min-width: 800px; }
+  .tree-row { display: flex; justify-content: center; gap: 12px; flex-wrap: nowrap; }
+  .tree-node {
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: center;
+    min-width: 110px;
+    position: relative;
+  }
+  .tree-node.root { background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.4); color: var(--accent); font-size: 0.9rem; }
+  .tree-node.level { background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.3); color: var(--purple); }
+  .tree-node.safe { background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3); color: var(--green); }
+  .tree-node.exposed { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
+  .tree-node.caution { background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.3); color: var(--yellow); }
+  .tree-node .sub { font-size: 0.7rem; font-weight: 400; color: var(--text2); display: block; margin-top: 3px; }
+  .tree-label { font-size: 0.72rem; color: var(--text2); text-align: center; margin-top: -8px; margin-bottom: -4px; }
+
+  /* ─── State Table ─── */
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th {
+    text-align: left; padding: 12px 14px; background: var(--surface2);
+    border-bottom: 1px solid var(--border); font-weight: 600;
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2);
+  }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  tr:hover td { background: rgba(56,189,248,0.03); }
+  .mono { font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .zero { color: var(--text2); }
+  .weight-bar { display: inline-block; height: 6px; border-radius: 3px; vertical-align: middle; margin-right: 4px; }
+  .w-dm { background: var(--orange); }
+  .w-wc { background: var(--accent); }
+  .w-or { background: var(--purple); }
+
+  /* ─── Pipeline ─── */
+  .pipeline { display: flex; align-items: center; gap: 0; flex-wrap: wrap; justify-content: center; }
+  .pipe-step {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; text-align: center; min-width: 140px;
+  }
+  .pipe-step .step-num { font-size: 0.7rem; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+  .pipe-step .step-title { font-size: 0.95rem; font-weight: 600; margin-top: 4px; }
+  .pipe-step .step-desc { font-size: 0.75rem; color: var(--text2); margin-top: 4px; }
+  .pipe-arrow { font-size: 1.2rem; color: var(--border); padding: 0 6px; }
+
+  /* ─── Insight Cards ─── */
+  .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  .insight {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px; border-left: 3px solid var(--green);
+  }
+  .insight.fail { border-left-color: var(--red); }
+  .insight.meta { border-left-color: var(--purple); }
+  .insight .insight-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; }
+  .insight .insight-body { font-size: 0.84rem; color: var(--text2); line-height: 1.55; }
+
+  /* ─── Scoring Formula ─── */
+  .formula-box {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 24px 28px; font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 0.88rem; line-height: 2; overflow-x: auto;
+  }
+  .formula-box .kw { color: var(--accent); }
+  .formula-box .num { color: var(--orange); }
+  .formula-box .cmt { color: #475569; }
+  .formula-box .meta { color: var(--purple); }
+
+  /* ─── Timeline ─── */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+  .tl-item { position: relative; margin-bottom: 20px; }
+  .tl-item::before {
+    content: ''; position: absolute; left: -24px; top: 6px;
+    width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--green); background: var(--bg);
+  }
+  .tl-score { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.05rem; color: var(--green); }
+  .tl-desc { font-size: 0.85rem; color: var(--text2); margin-top: 2px; }
+  .tl-hash { font-family: monospace; font-size: 0.72rem; color: #475569; }
+
+  /* ─── Nested Architecture Diagram ─── */
+  .nested-arch {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  .outer-box {
+    border: 2px solid var(--purple);
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+  }
+  .outer-box .box-label {
+    position: absolute; top: -12px; left: 20px;
+    background: var(--surface); padding: 0 10px;
+    font-size: 0.82rem; font-weight: 700; color: var(--purple);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .inner-box {
+    border: 2px solid var(--green);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+    position: relative;
+  }
+  .inner-box .box-label {
+    position: absolute; top: -12px; left: 20px;
+    background: var(--surface); padding: 0 10px;
+    font-size: 0.82rem; font-weight: 700; color: var(--green);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .arch-row { display: flex; gap: 12px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  .arch-item {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 16px; font-size: 0.82rem;
+  }
+  .arch-item.editable { border-color: var(--green); color: var(--green); }
+  .arch-item.frozen { border-color: var(--border); color: var(--text2); }
+  .arch-item.meta-edit { border-color: var(--purple); color: var(--purple); }
+  .arch-item.data { border-color: var(--orange); color: var(--orange); }
+  .arch-arrow { color: var(--text2); font-size: 0.9rem; }
+  .arch-note { font-size: 0.78rem; color: var(--text2); margin-top: 4px; }
+
+  /* ─── Footer ─── */
+  .footer {
+    text-align: center; padding: 40px 20px;
+    border-top: 1px solid var(--border); color: #475569; font-size: 0.78rem;
+  }
+
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 1.8rem; }
+    .hero { padding: 40px 20px 36px; }
+    .container { padding: 24px 16px; }
+    .card-grid { grid-template-columns: 1fr 1fr; }
+    .pipeline { flex-direction: column; }
+    .pipe-arrow { transform: rotate(90deg); }
+    .hero .badges { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ HERO ════════════════════ -->
+<div class="hero">
+  <h1>Regime Autoresearch + Meta-Harness</h1>
+  <div class="subtitle">A two-loop autonomous optimization system for Nifty 50 options regime classification</div>
+  <div class="badges">
+    <div class="score-badge badge-inner">
+      <span class="label">INNER LOOP (Autoresearch)</span>
+      Optimizes the classifier
+    </div>
+    <div class="score-badge badge-outer">
+      <span class="label">OUTER LOOP (Meta-Harness)</span>
+      Optimizes the frame
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ════════════════════ WHAT IS THIS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#9889;</span> What Is This?</div>
+  <p style="color:var(--text2); font-size:0.95rem; max-width:900px; line-height:1.7;">
+    This is a <strong style="color:var(--text)">two-loop autonomous research system</strong> that optimizes a regime classification engine for three Nifty 50 options selling strategies: <strong style="color:var(--orange)">DM</strong> (Delta-Managed), <strong style="color:var(--accent)">WC</strong> (Wide-Condor), and <strong style="color:var(--purple)">Orion</strong>.
+  </p>
+  <p style="color:var(--text2); font-size:0.95rem; max-width:900px; line-height:1.7; margin-top:12px;">
+    The <strong style="color:var(--green)">inner loop</strong> (Autoresearch) modifies the classification logic &mdash; IV boundaries, feature selection, strategy weights &mdash; to maximize a composite score on validation data. Over 109 experiments it improved the score from 0.568 to 0.926.
+  </p>
+  <p style="color:var(--text2); font-size:0.95rem; max-width:900px; line-height:1.7; margin-top:12px;">
+    The <strong style="color:var(--purple)">outer loop</strong> (Meta-Harness) optimizes the <em>frame</em> the inner loop operates in &mdash; the scoring formula weights, normalization constants, feature pipeline, and train/val split. After each inner loop completes, the meta-harness evaluates the best classifier on truly <strong style="color:var(--text)">held-out OOS data</strong> that the inner loop never sees. This prevents overfitting and finds configurations that genuinely generalize.
+  </p>
+</div>
+
+<!-- ════════════════════ TWO-LOOP ARCHITECTURE ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#127922;</span> Two-Loop Architecture</div>
+  <div class="nested-arch">
+    <div class="outer-box">
+      <span class="box-label">Meta-Harness (Outer Loop)</span>
+
+      <div class="arch-row">
+        <div class="arch-item meta-edit">meta_config.json</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item meta-edit">Scoring weights &amp; norms</div>
+        <div class="arch-item meta-edit">Extra features</div>
+        <div class="arch-item meta-edit">Train/Val split</div>
+        <div class="arch-item meta-edit">Strategy weights</div>
+      </div>
+      <div class="arch-row" style="margin-top:4px;">
+        <div class="arch-item" style="border-color:var(--cyan);color:var(--cyan)">MAB Scheduler (5 arms)</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item" style="border-color:var(--cyan);color:var(--cyan)">IC Dedup Gate</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item" style="border-color:var(--cyan);color:var(--cyan)">Knowledge Forest</div>
+      </div>
+      <div class="arch-note">MAB picks dimension &rarr; IC dedup filters features &rarr; Forest provides experiment memory</div>
+
+      <div class="inner-box">
+        <span class="box-label">Autoresearch (Inner Loop)</span>
+        <div class="arch-row">
+          <div class="arch-item editable">regime_experiment.py</div>
+          <span class="arch-arrow">&rarr;</span>
+          <div class="arch-item editable">IV boundaries</div>
+          <div class="arch-item editable">Feature selection</div>
+          <div class="arch-item editable">Strategy weights</div>
+        </div>
+        <div class="arch-note">~40 experiments per iteration &mdash; edit, commit, run, score, keep/revert</div>
+        <div class="arch-row" style="margin-top:12px;">
+          <div class="arch-item frozen">prepare_rv.py</div>
+          <span class="arch-arrow">&rarr; evaluates on &rarr;</span>
+          <div class="arch-item data">Validation set</div>
+        </div>
+      </div>
+
+      <div class="arch-row" style="margin-top:12px;">
+        <span class="arch-arrow">After inner loop completes:</span>
+      </div>
+      <div class="arch-row">
+        <div class="arch-item meta-edit">Best classifier</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item data" style="border-color:var(--red); color:var(--red);">OOS holdout</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item" style="border-color:var(--pink); color:var(--pink);">Paper Trade Gate</div>
+        <span class="arch-arrow">&rarr;</span>
+        <div class="arch-item meta-edit">meta_results.tsv</div>
+      </div>
+      <div class="arch-note">OOS data is <strong>never seen</strong> by the inner loop &mdash; Paper Trade Gate validates on forward-walk before promotion</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ THE KEY INSIGHT ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128161;</span> Why Two Loops?</div>
+  <div class="insight-grid">
+    <div class="insight meta">
+      <div class="insight-title">The frame shapes the solution</div>
+      <div class="insight-body">
+        The inner loop can only explore within the search space defined by the scoring formula. If the formula gives 40% weight to Sharpe and 25% to safe separation, the agent finds the best solution <em>within that frame</em>. But what if rank stability deserves 30% weight? A different scoring formula would lead the inner loop to discover a completely different &mdash; potentially better &mdash; classifier.
+      </div>
+    </div>
+    <div class="insight meta">
+      <div class="insight-title">Validation &#8800; generalization</div>
+      <div class="insight-body">
+        The inner loop achieved 0.926 on validation, but the same classifier scored Sharpe 0.00 on the most recent OOS data (Feb&ndash;Mar 2026). The meta-harness exists to find scoring configurations that produce classifiers that <em>actually generalize</em> to unseen market conditions.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="part-divider"><h2>Part 1: Inner Loop (Autoresearch)</h2></div>
+<!-- ════════════════════════════════════════════════════════ -->
+
+<!-- ════════════════════ HOW CLASSIFICATION WORKS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#9881;</span> How The Classification Works</div>
+  <p style="color:var(--text2); font-size:0.9rem; margin-bottom:16px;">
+    Every trading day goes through a <strong style="color:var(--text)">3-layer decision tree</strong> to produce one of 8 regime states:
+  </p>
+  <div class="diagram-wrap">
+    <div class="tree">
+      <div class="tree-row">
+        <div class="tree-node root">Each Trading Day<span class="sub">iv_lag (prior day's 7-day IV)</span></div>
+      </div>
+      <div class="tree-label">&#9660; IV Level Boundaries</div>
+      <div class="tree-row">
+        <div class="tree-node level">L1: Low IV<span class="sub">iv_lag &lt; 8.5</span></div>
+        <div class="tree-node level">L2: Moderate IV<span class="sub">8.5 &le; iv_lag &lt; 11</span></div>
+        <div class="tree-node level">L3: High IV<span class="sub">iv_lag &ge; 11</span></div>
+      </div>
+      <div class="tree-label">&#9660; Safe/Exposed Split (PK_IV_ratio or zscore) + Direction (IV_chg_1d for L2)</div>
+      <div class="tree-row">
+        <div class="tree-node safe">L1 Safe<span class="sub">14d | Sharpe 14.57</span></div>
+        <div class="tree-node exposed">L1 Exposed<span class="sub">7d | AL 14.3%</span></div>
+        <div class="tree-node safe">L2 Safe<span class="sub">6d</span></div>
+        <div class="tree-node caution">L2 Caution-A<span class="sub">9d</span></div>
+        <div class="tree-node caution">L2 Caution-B<span class="sub">20d | Sharpe 9.48</span></div>
+        <div class="tree-node exposed">L2 Risky<span class="sub">33d | AL 12.1%</span></div>
+        <div class="tree-node safe">L3 Safe<span class="sub">26d | Sharpe 4.30</span></div>
+        <div class="tree-node exposed">L3 Exposed<span class="sub">28d | AL 17.9%</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ INNER LOOP ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128257;</span> Inner Loop: The Experiment Cycle</div>
+  <div class="diagram-wrap" style="padding:24px;">
+    <div class="pipeline" style="flex-wrap:wrap;gap:8px;">
+      <div class="pipe-step" style="border-color:var(--accent);">
+        <div class="step-num">1</div>
+        <div class="step-title">Edit</div>
+        <div class="step-desc">Modify regime_experiment.py</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step">
+        <div class="step-num">2</div>
+        <div class="step-title">Commit</div>
+        <div class="step-desc">git commit -am "exp42: try X"</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step">
+        <div class="step-num">3</div>
+        <div class="step-title">Run</div>
+        <div class="step-desc">python regime_experiment.py</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step">
+        <div class="step-num">4</div>
+        <div class="step-title">Score</div>
+        <div class="step-desc">Parse composite_score</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--green);">
+        <div class="step-num">5</div>
+        <div class="step-title">Keep or Revert</div>
+        <div class="step-desc">Better &rarr; keep. Worse &rarr; revert.</div>
+      </div>
+    </div>
+    <p style="text-align:center; color:var(--text2); font-size:0.82rem; margin-top:16px;">
+      The inner loop modifies <strong>5 dimensions</strong>: IV boundaries, feature selection, tree architecture, strategy weights, and snapshot fusion.
+      <br>Each run takes ~0.6s. In bounded mode (under meta-harness) it runs ~40 experiments per iteration.
+    </p>
+  </div>
+</div>
+
+<!-- ════════════════════ SCORING ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#127919;</span> Scoring Formula <span style="font-size:0.8rem;color:var(--purple);margin-left:8px;">(meta-harness tunable)</span></div>
+  <div class="formula-box">
+<span class="kw">composite</span> = <span class="meta">w_sharpe</span> &times; min(val_sharpe / <span class="meta">sharpe_norm</span>, <span class="meta">sharpe_cap</span>)  <span class="cmt">// default: 0.40 &times; min(x/5.0, 1.5)</span>
+         + <span class="meta">w_safe_sep</span> &times; min(safe_sep / <span class="meta">safe_sep_norm</span>, <span class="meta">safe_sep_cap</span>)  <span class="cmt">// default: 0.25 &times; min(x/10.0, 1.0)</span>
+         + <span class="meta">w_rank_corr</span> &times; max(rank_corr, 0)         <span class="cmt">// default: 0.20</span>
+         + <span class="meta">w_coverage</span> &times; coverage                    <span class="cmt">// default: 0.15</span>
+
+<span class="cmt">// <span class="meta">Purple values</span> are controlled by meta_config.json</span>
+<span class="cmt">// The inner loop sees a fixed formula; the outer loop changes it between iterations</span>
+  </div>
+  <p style="color:var(--text2); font-size:0.84rem; margin-top:12px;">
+    <strong>Train:</strong> Feb 2023 &ndash; Jun 2025 (~594 days) &nbsp;|&nbsp;
+    <strong>Validation:</strong> Jul 2025 &ndash; Jan 2026 (143 days) &nbsp;|&nbsp;
+    <strong>OOS:</strong> Jan 2021 &ndash; Jan 2023 + Feb&ndash;Mar 2026 (reserved for meta-harness only)
+  </p>
+</div>
+
+<!-- ════════════════════ OPTIMIZATION JOURNEY ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128640;</span> Inner Loop: Optimization Journey (apr6 run)</div>
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-score">0.568 &rarr; baseline</div>
+      <div class="tl-desc">Initial config: boundaries [12,17], equal weights, PK_IV_ratio everywhere</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-score">0.837 &rarr; +47%</div>
+      <div class="tl-desc"><strong>Boundary compression [8.5, 11]</strong> + IV_chg_1d direction at L2 (threshold -1.1) + cut DM/WC weights in exposed states.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-score">0.846 &rarr; +1%</div>
+      <div class="tl-desc"><strong>L3 zscore splitter.</strong> Using PK_IV_zscore_30d for L3 Safe/Exposed split achieved perfect rank stability (1.0).</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-score">0.899 &rarr; +6%</div>
+      <div class="tl-desc"><strong>WC dominance at L1.</strong> In low-IV regimes, pure WC [0,1,0] crushed. The biggest single discovery.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-score">0.926 &rarr; +3%</div>
+      <div class="tl-desc"><strong>L1 Exposed [0,1,0.2] + L2 CautionA [0.2,0.4,0.8].</strong> Fine-grained weight optimization. val_sharpe reached 4.08.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="part-divider"><h2>Part 2: Outer Loop (Meta-Harness)</h2></div>
+<!-- ════════════════════════════════════════════════════════ -->
+
+<!-- ════════════════════ META LOOP ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128257;</span> Outer Loop: The Upgraded Meta Cycle</div>
+  <div class="diagram-wrap" style="padding:24px;">
+    <div class="pipeline" style="flex-wrap:wrap;gap:8px;">
+      <div class="pipe-step" style="border-color:var(--cyan);">
+        <div class="step-num" style="color:var(--cyan)">1</div>
+        <div class="step-title">MAB Select</div>
+        <div class="step-desc">Pick highest-UCB dimension<br>(scoring, norms, features, splits, strategy)</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--accent);">
+        <div class="step-num" style="color:var(--accent)">2</div>
+        <div class="step-title">IC Dedup</div>
+        <div class="step-desc">Filter redundant features<br>before inner loop starts</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--green);">
+        <div class="step-num" style="color:var(--green)">3</div>
+        <div class="step-title">Inner Loop</div>
+        <div class="step-desc">Reads knowledge forest<br>~40 experiments &rarr; best classifier</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--red);">
+        <div class="step-num" style="color:var(--red)">4</div>
+        <div class="step-title">OOS Eval</div>
+        <div class="step-desc">Held-out 2021&ndash;2023<br>+ Feb&ndash;Mar 2026</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--pink);">
+        <div class="step-num" style="color:var(--pink)">5</div>
+        <div class="step-title">Paper Trade</div>
+        <div class="step-desc">Forward-walk validation<br>on genuinely unseen data</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="border-color:var(--purple);">
+        <div class="step-num" style="color:var(--purple)">6</div>
+        <div class="step-title">Log &amp; Learn</div>
+        <div class="step-desc">Update forest + MAB<br>Promote or iterate</div>
+      </div>
+    </div>
+    <p style="text-align:center; color:var(--text2); font-size:0.82rem; margin-top:16px;">
+      Steps <span style="color:var(--cyan)">1</span>, <span style="color:var(--accent)">2</span>, <span style="color:var(--pink)">5</span>, <span style="color:var(--purple)">6</span> are upgrade systems.
+      Steps <span style="color:var(--green)">3</span> and <span style="color:var(--red)">4</span> are the core loop, now conditioned on knowledge forest.
+    </p>
+  </div>
+</div>
+
+<!-- ════════════════════ 5 META DIMENSIONS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128736;</span> Meta-Harness: 5 Optimization Dimensions <span style="font-size:0.8rem;color:var(--text2);margin-left:6px;">(MAB arms)</span></div>
+  <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
+    <div class="card" style="border-top:3px solid var(--purple)">
+      <div class="card-label">Dim 1 &mdash; Highest Priority</div>
+      <div style="font-weight:600; font-size:1rem; margin-bottom:6px;">Scoring Weights</div>
+      <div class="card-detail">The composite formula weights (0.40/0.25/0.20/0.15) and the inner loop's optimization target.</div>
+      <div class="mono" style="margin-top:8px; color:var(--purple); font-size:0.8rem;">w_sharpe, w_safe_sep, w_rank_corr, w_coverage</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--cyan)">
+      <div class="card-label">Dim 2</div>
+      <div style="font-weight:600; font-size:1rem; margin-bottom:6px;">Features</div>
+      <div class="card-detail">Expand the feature menu: IV_20d, IV_momentum_5d, VRP_5d, vol-of-vol. IC dedup auto-filters redundant pairs.</div>
+      <div class="mono" style="margin-top:8px; color:var(--cyan); font-size:0.8rem;">8 features in registry</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--orange)">
+      <div class="card-label">Dim 3</div>
+      <div style="font-weight:600; font-size:1rem; margin-bottom:6px;">Train/Val Split</div>
+      <div class="card-detail">Which data the inner loop trains and validates on. Different dates = different market regimes.</div>
+      <div class="mono" style="margin-top:8px; color:var(--orange); font-size:0.8rem;">train_start/end, val_start/end</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--pink)">
+      <div class="card-label">Dim 4</div>
+      <div style="font-weight:600; font-size:1rem; margin-bottom:6px;">Normalization</div>
+      <div class="card-detail">How aggressively each metric is normalized. Lower sharpe_norm diversifies inner loop exploration.</div>
+      <div class="mono" style="margin-top:8px; color:var(--pink); font-size:0.8rem;">sharpe_norm, safe_sep_norm</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--yellow)">
+      <div class="card-label">Dim 5 &mdash; Co-Optimization</div>
+      <div style="font-weight:600; font-size:1rem; margin-bottom:6px;">Strategy Weights</div>
+      <div class="card-detail">Lock per-state [DM,WC,Orion] allocations and let the inner loop only optimize the classifier. 6 curated templates.</div>
+      <div class="mono" style="margin-top:8px; color:var(--yellow); font-size:0.8rem;">strategy_weights_override + lock</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ 5 UPGRADE SYSTEMS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#9889;</span> 5 Upgrade Systems</div>
+  <p style="color:var(--text2); font-size:0.9rem; margin-bottom:16px;">
+    Inspired by <strong style="color:var(--text)">RD-Agent(Q)</strong> and <strong style="color:var(--text)">FinRL-X</strong>. Each system addresses a specific weakness in the base two-loop architecture.
+  </p>
+  <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
+    <div class="card" style="border-top:3px solid var(--green)">
+      <div class="card-label">Upgrade 1</div>
+      <div style="font-weight:600; font-size:0.95rem; margin-bottom:6px;">Knowledge Forest</div>
+      <div class="card-detail">Persistent experiment memory across all meta-iterations. The inner loop reads a summary before starting &mdash; avoids re-trying known failures, builds on successes.</div>
+      <div class="mono" style="margin-top:8px; color:var(--green); font-size:0.78rem;">forest_manager.py &bull; experiment_forest.json</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--purple)">
+      <div class="card-label">Upgrade 2</div>
+      <div style="font-weight:600; font-size:0.95rem; margin-bottom:6px;">MAB Scheduler</div>
+      <div class="card-detail">UCB1 multi-armed bandit across 5 dimensions. Adaptively allocates budget to whichever dimension produces the largest OOS improvement.</div>
+      <div class="mono" style="margin-top:8px; color:var(--purple); font-size:0.78rem;">mab_scheduler.py &bull; mab_state.json</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--cyan)">
+      <div class="card-label">Upgrade 3</div>
+      <div style="font-weight:600; font-size:0.95rem; margin-bottom:6px;">IC Dedup Gate</div>
+      <div class="card-detail">Pairwise Spearman correlation check on activated features. Drops any feature with |corr| &gt; 0.75 to another kept feature before the inner loop starts.</div>
+      <div class="mono" style="margin-top:8px; color:var(--cyan); font-size:0.78rem;">ic_dedup.py &bull; threshold: 0.75</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--yellow)">
+      <div class="card-label">Upgrade 4</div>
+      <div style="font-weight:600; font-size:0.95rem; margin-bottom:6px;">Strategy Co-Opt</div>
+      <div class="card-detail">Alternates between classifier and strategy optimization. The outer loop injects fixed [DM,WC,Orion] weights; the inner loop optimizes only boundaries and features.</div>
+      <div class="mono" style="margin-top:8px; color:var(--yellow); font-size:0.78rem;">strategy_coopt.py &bull; 6 templates</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--pink)">
+      <div class="card-label">Upgrade 5</div>
+      <div style="font-weight:600; font-size:0.95rem; margin-bottom:6px;">Paper Trade Gate</div>
+      <div class="card-detail">Forward-walk validation on the most recent unseen data. Checks Sharpe, state diversity, and transition stability before promoting to production.</div>
+      <div class="mono" style="margin-top:8px; color:var(--pink); font-size:0.78rem;">paper_trade_gate.py &bull; PROMOTE/ITERATE/REJECT</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ PRE-BUILT SWEEPS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128202;</span> Running the System</div>
+  <div class="formula-box" style="line-height:1.7;">
+<span class="cmt"># ── Adaptive MAB sweep (recommended) ──</span>
+python meta_harness.py --adaptive --budget 20 --max-inner 40
+python meta_harness.py --adaptive --budget 20 --paper-trade    <span class="cmt"># + forward validation</span>
+
+<span class="cmt"># ── Single dimension sweeps ──</span>
+python meta_harness.py --sweep scoring --max-inner 40     <span class="cmt"># 8 weight configs</span>
+python meta_harness.py --sweep norms --max-inner 40       <span class="cmt"># 6 norm configs</span>
+python meta_harness.py --sweep features --max-inner 40    <span class="cmt"># 7 feature sets</span>
+python meta_harness.py --sweep splits --max-inner 40      <span class="cmt"># 5 date splits</span>
+python meta_harness.py --sweep strategy --max-inner 40    <span class="cmt"># 6 strategy templates (co-opt)</span>
+
+<span class="cmt"># ── Diagnostics ──</span>
+python meta_harness.py --baseline                         <span class="cmt"># OOS performance</span>
+python meta_harness.py --paper-trade-only --days 10       <span class="cmt"># forward validation</span>
+python meta_harness.py --forest-summary                   <span class="cmt"># experiment history</span>
+python meta_harness.py --mab-stats                        <span class="cmt"># MAB arm statistics</span>
+python strategy_coopt.py --list-templates                 <span class="cmt"># strategy templates</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="part-divider"><h2>System Architecture</h2></div>
+<!-- ════════════════════════════════════════════════════════ -->
+
+<!-- ════════════════════ FILE ARCHITECTURE ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128451;</span> File Architecture</div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>File</th><th>Role</th><th>Who Modifies</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono" style="color:var(--green)">regime_experiment.py</td>
+          <td>Classification logic, boundaries, features, weights</td>
+          <td style="color:var(--green)">Inner loop (Autoresearch)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--green)">regime_experiment_baseline.py</td>
+          <td>Frozen snapshot of best config &mdash; inner loop resets from this each iteration</td>
+          <td style="color:var(--text2)">Snapshot (frozen)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--purple)">meta_config.py</td>
+          <td>MetaConfig dataclass &mdash; scoring weights, norms, features, splits</td>
+          <td style="color:var(--text2)">Framework (frozen)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--purple)">meta_config.json</td>
+          <td>Active configuration for current iteration (written/removed per iteration)</td>
+          <td style="color:var(--purple)">Outer loop (Meta-Harness)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--text2)">prepare_rv.py</td>
+          <td>Evaluation harness &mdash; delegates to prepare_rv_meta.py when meta_config.json exists</td>
+          <td style="color:var(--text2)">Framework (auto-delegates)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--text2)">prepare_rv_meta.py</td>
+          <td>Parameterized evaluation &mdash; reads config, computes extra features, parameterized scoring</td>
+          <td style="color:var(--text2)">Framework (frozen)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--purple)">meta_harness.py</td>
+          <td>Outer loop orchestrator &mdash; MAB, IC dedup, co-opt, paper trade, forest integration</td>
+          <td style="color:var(--text2)">Framework (frozen)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--purple)">inner_loop.py</td>
+          <td>Inner loop runner &mdash; spawns Claude, injects forest summary into prompt, parses results</td>
+          <td style="color:var(--text2)">Framework (frozen)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--green)">forest_manager.py</td>
+          <td>Knowledge Forest &mdash; persistent experiment memory, query, SOTA tracking</td>
+          <td style="color:var(--text2)">Upgrade 1</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--purple)">mab_scheduler.py</td>
+          <td>MAB Scheduler &mdash; UCB1 across 5 dimensions, tracks OOS deltas per arm</td>
+          <td style="color:var(--text2)">Upgrade 2</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--cyan)">ic_dedup.py</td>
+          <td>IC Dedup Gate &mdash; pairwise Spearman correlation, drops redundant features</td>
+          <td style="color:var(--text2)">Upgrade 3</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--yellow)">strategy_coopt.py</td>
+          <td>Strategy Co-Opt &mdash; 6 weight templates, injection into regime_experiment.py, lock mode</td>
+          <td style="color:var(--text2)">Upgrade 4</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--pink)">paper_trade_gate.py</td>
+          <td>Paper Trade Gate &mdash; forward-walk validation, PROMOTE/ITERATE/REJECT</td>
+          <td style="color:var(--text2)">Upgrade 5</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--text2)">program_regime.md</td>
+          <td>Instructions for the inner loop AI agent (includes knowledge forest section)</td>
+          <td style="color:var(--text2)">Spec</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--purple)">program_meta_harness.md</td>
+          <td>Instructions for the outer loop AI agent (includes upgrade system docs)</td>
+          <td style="color:var(--text2)">Spec</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--text2)">results.tsv</td>
+          <td>Inner loop experiment log (reset per meta-iteration)</td>
+          <td style="color:var(--green)">Inner loop</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--purple)">meta_results.tsv</td>
+          <td>Outer loop results &mdash; OOS performance across meta-iterations</td>
+          <td style="color:var(--purple)">Outer loop</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--orange)">experiment_forest.json</td>
+          <td>All experiments ever run &mdash; persistent memory across all iterations</td>
+          <td style="color:var(--text2)">Both loops (auto)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--orange)">mab_state.json</td>
+          <td>MAB arm pull counts, rewards, UCB1 state</td>
+          <td style="color:var(--text2)">MAB scheduler (auto)</td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--purple)">meta_configs/</td>
+          <td>Directory of config snapshots for each meta-iteration</td>
+          <td style="color:var(--purple)">Outer loop</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════ HOW DELEGATION WORKS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128279;</span> How Meta-Config Delegation Works</div>
+  <div class="diagram-wrap" style="padding:24px;">
+    <div class="pipeline" style="gap:8px;flex-wrap:wrap;">
+      <div class="pipe-step" style="border-color:var(--purple); min-width:170px;">
+        <div class="step-num" style="color:var(--purple)">meta_config.json</div>
+        <div class="step-title">Exists?</div>
+      </div>
+      <div class="pipe-arrow">&rarr;</div>
+      <div class="pipe-step" style="min-width:200px;">
+        <div class="step-num">Yes</div>
+        <div class="step-title">prepare_rv_meta.py</div>
+        <div class="step-desc">Parameterized weights, norms, features, periods</div>
+      </div>
+      <div class="pipe-arrow" style="visibility:hidden;">&rarr;</div>
+      <div class="pipe-step" style="min-width:200px;">
+        <div class="step-num">No</div>
+        <div class="step-title">prepare_rv.py (original)</div>
+        <div class="step-desc">Hardcoded defaults &mdash; 100% backward compatible</div>
+      </div>
+    </div>
+    <p style="text-align:center; color:var(--text2); font-size:0.82rem; margin-top:16px;">
+      <code style="color:var(--accent)">prepare_rv.py</code> checks for <code style="color:var(--purple)">meta_config.json</code> at import time.
+      The inner loop always imports from <code>prepare_rv</code> &mdash; it doesn't know whether it's parameterized or original.
+    </p>
+  </div>
+</div>
+
+<!-- ════════════════════ KEY INSIGHTS ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128161;</span> Key Insights</div>
+  <div class="insight-grid">
+    <div class="insight">
+      <div class="insight-title">WC is king in low IV</div>
+      <div class="insight-body">
+        The Wide Condor strategy produced a Sharpe of 14.57 in L1 Safe (IV &lt; 8.5). Pure positive theta extraction in calm markets. This single insight accounted for ~50% of the inner loop's score improvement.
+      </div>
+    </div>
+    <div class="insight">
+      <div class="insight-title">Boundaries matter more than features</div>
+      <div class="insight-body">
+        Compressing IV boundaries from [12,17] to [8.5,11] was the first major breakthrough. Spreading days across all 8 states fixed coverage and rank stability simultaneously.
+      </div>
+    </div>
+    <div class="insight meta">
+      <div class="insight-title">OOS reveals the truth</div>
+      <div class="insight-body">
+        The inner loop's 0.926 classifier has OOS1 Sharpe 4.38 (2021&ndash;2023) but OOS2 Sharpe 0.00 (Feb&ndash;Mar 2026). The classifier works in historical data but fails on the most recent period. This is exactly what the meta-harness is designed to fix.
+      </div>
+    </div>
+    <div class="insight fail">
+      <div class="insight-title">What didn't work in the inner loop</div>
+      <div class="insight-body">
+        Adaptive boundaries, dual-snapshot fusion, custom risk features as splitters, VRP-based direction, and WC-heavy weights in L2/L3 all hurt the composite score. WC's edge is specific to low-IV regimes.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ FEATURE REGISTRY ════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">&#128736;</span> Extra Feature Registry <span style="font-size:0.8rem;color:var(--purple);margin-left:8px;">(meta-harness controlled)</span></div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Feature Name</th><th>Description</th><th>Window</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono" style="color:var(--cyan)">IV_20d</td><td>20-day rolling IV mean</td><td>20d</td></tr>
+        <tr><td class="mono" style="color:var(--cyan)">PK_20d</td><td>20-day rolling Parkinson vol</td><td>20d</td></tr>
+        <tr><td class="mono" style="color:var(--cyan)">IV_momentum_5d</td><td>5-day IV rate of change (%)</td><td>5d</td></tr>
+        <tr><td class="mono" style="color:var(--cyan)">VRP_5d</td><td>5-day rolling volatility risk premium</td><td>5d</td></tr>
+        <tr><td class="mono" style="color:var(--cyan)">IV_range_10d</td><td>10-day IV high-low range</td><td>10d</td></tr>
+        <tr><td class="mono" style="color:var(--cyan)">RV_IV_gap</td><td>Realized vol minus implied vol</td><td>1d</td></tr>
+        <tr><td class="mono" style="color:var(--cyan)">PK_IV_zscore_60d</td><td>60-day z-scored PK/IV ratio</td><td>60d</td></tr>
+        <tr><td class="mono" style="color:var(--cyan)">IV_vol_of_vol_20d</td><td>Volatility of IV changes (vol-of-vol)</td><td>20d</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="color:var(--text2); font-size:0.82rem; margin-top:10px;">
+    The meta-harness activates features via <code style="color:var(--purple)">extra_features</code> in meta_config.json.
+    The inner loop's <code>compute_extra_features()</code> can use any column in the DataFrame.
+  </p>
+</div>
+
+</div> <!-- /container -->
+
+<div class="footer">
+  Regime Classification System for Nifty 50 Options Selling &nbsp;&bull;&nbsp; Two-loop architecture with 5 upgrade systems
+  <br>Inner loop: Autoresearch &nbsp;&bull;&nbsp; Outer loop: Meta-Harness (MAB &times; 5 dims) &nbsp;&bull;&nbsp; Upgrades: Forest, MAB, IC Dedup, Co-Opt, Paper Trade
+  <br>Built with Claude
+</div>
+
+</body>
+</html>
