@@ -3,12 +3,13 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from pipeline.nsqa_data import fetch_rv_daily
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "features"
 
-# Load data
-rv = pd.read_parquet(DATA_DIR / 'rv_daily.parquet')
+# Load data via NSQA (uses cache if available, else computes fresh)
+rv = fetch_rv_daily(cache_path=DATA_DIR / "rv_daily.parquet")
 rv['timestamp'] = pd.to_datetime(rv['timestamp']).dt.date
 
 dm = pd.read_excel(DATA_DIR / 'strategy_returns_DM_per_trade_both_max_100.xlsx', sheet_name='returns')

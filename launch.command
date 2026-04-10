@@ -13,7 +13,8 @@ echo ""
 lsof -ti:5500 | xargs kill -9 2>/dev/null
 lsof -ti:5501 | xargs kill -9 2>/dev/null
 
-PYTHON=/opt/homebrew/bin/python3
+PYTHON=/Users/harsha/Desktop/Research/nsqa_codebase/.venv/bin/python
+export PYTHONPATH="$(pwd)"
 
 # ── Step 1: Regenerate nifty_spot_daily.parquet ──
 echo "[1/5] Fetching & aggregating spot data..."

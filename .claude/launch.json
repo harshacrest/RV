@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "rv-backend",
+      "runtimeExecutable": "/Users/harsha/Desktop/Research/nsqa_codebase/.venv/bin/python",
+      "runtimeArgs": ["api_server.py"],
+      "port": 5501
+    },
+    {
       "name": "rv-frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
