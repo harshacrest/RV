@@ -3306,5 +3306,453 @@ def get_adaptive_oos(
     }
 
 
+@app.get("/api/alpha-insights")
+def get_alpha_insights(
+    snapshot: str = Query("1530"),
+    dte: int | None = None,
+):
+    """
+    Deep alpha-generating insights from the autoresearch framework.
+    Combines regime classification diagnostics, feature importance,
+    boundary sensitivity, strategy allocation recommendations, and
+    out-of-sample validation into a single comprehensive view.
+    """
+    import json as _json
+    from scipy.stats import spearmanr as _spearmanr
+
+    # ── Load diagnostics report if available ──
+    diag_path = BASE / "autoresearch_regime" / "output" / "diagnostics_report.json"
+    diag = {}
+    if diag_path.exists():
+        with open(diag_path) as f:
+            diag = _json.load(f)
+
+    # ── Load and classify data with AUTORESEARCH boundaries (8.5/11) ──
+    # The dashboard uses 12/17 but the autoresearch framework optimized at 8.5/11
+    ALPHA_L1 = 8.5
+    ALPHA_L2 = 11.0
+
+    rv = _compute_regime_features(RV_DATA, snapshot)
+
+    # Compute additional features needed for alpha analysis
+    rv["IV_10d"] = rv["iv_lag"].rolling(10, min_periods=5).mean() if "iv_lag" in rv.columns else np.nan
+    rv["PK_10d"] = rv["PK_today"].shift(1).rolling(10, min_periods=5).mean() if "PK_today" in rv.columns else np.nan
+    iv_col_snap = f"IV_7d_{snapshot}"
+    if iv_col_snap in rv.columns:
+        _iv_raw = rv[iv_col_snap].shift(-1) if snapshot in ("0915", "0916") else rv[iv_col_snap]
+    else:
+        _iv_raw = rv.get("IV_7d", pd.Series(dtype=float))
+    _iv_change = _iv_raw - _iv_raw.shift(1)
+    rv["IV_chg_1d"] = _iv_change.shift(1)
+    rv["IV_percentile_60d"] = _iv_raw.shift(1).rolling(60, min_periods=20).apply(
+        lambda x: (x.iloc[-1] <= x).mean() * 100 if len(x) > 0 else np.nan, raw=False
+    )
+    if "PK_IV_ratio" in rv.columns:
+        rv["PK_IV_zscore_30d"] = rv["PK_IV_ratio"].rolling(30, min_periods=10).apply(
+            lambda x: (x.iloc[-1] - x.mean()) / x.std() if x.std() > 0 else 0, raw=False
+        )
+
+    # Classify with autoresearch boundaries
+    clean_rv = rv.dropna(subset=["iv_lag", "PK_IV_ratio"])
+    # Compute PK/IV thresholds from training data at these boundaries
+    _train_mask = (clean_rv["date"] >= pd.Timestamp("2023-02-01").date()) & (clean_rv["date"] <= pd.Timestamp("2025-06-30").date())
+    _train_rv = clean_rv[_train_mask]
+    _l1_data = _train_rv[_train_rv["iv_lag"] < ALPHA_L1]["PK_IV_ratio"]
+    _l2_data = _train_rv[(_train_rv["iv_lag"] >= ALPHA_L1) & (_train_rv["iv_lag"] < ALPHA_L2)]["PK_IV_ratio"]
+    _l3_data = _train_rv[_train_rv["iv_lag"] >= ALPHA_L2]["PK_IV_ratio"]
+    _th_l1 = float(_l1_data.median()) if len(_l1_data) > 5 else 0.63
+    _th_l2 = float(_l2_data.median()) if len(_l2_data) > 5 else 0.65
+    _th_l3 = float(_l3_data.median()) if len(_l3_data) > 5 else 0.67
+
+    def _alpha_classify(row):
+        iv = row.get("iv_lag")
+        pk = row.get("PK_IV_ratio")
+        iv_chg = row.get("IV_chg_5d")
+        if pd.isna(iv) or pd.isna(pk):
+            return None
+        if iv < ALPHA_L1:
+            return "L1 Safe" if pk <= _th_l1 else "L1 Exposed"
+        elif iv < ALPHA_L2:
+            iv_falling = iv_chg <= 0 if not pd.isna(iv_chg) else True
+            if pk <= _th_l2:
+                return "L2 Safe" if iv_falling else "L2 Caution-B"
+            else:
+                return "L2 Caution-A" if iv_falling else "L2 Risky"
+        else:
+            return "L3 Safe" if pk <= _th_l3 else "L3 Exposed"
+
+    rv["regime_state"] = rv.apply(_alpha_classify, axis=1)
+
+    # Merge strategies
+    merged = rv.copy()
+    for skey, sdf in STRAT_DATA.items():
+        st = sdf[["Date", "Net_Daily_PnL_PerCent"]].copy()
+        st.columns = ["Date", f"pnl_{skey}"]
+        merged = merged.merge(st, left_on="date", right_on="Date", how="left")
+        merged.drop(columns=["Date"], inplace=True, errors="ignore")
+
+    pnl_cols = [f"pnl_{s}" for s in ["dm", "wc", "orion"] if f"pnl_{s}" in merged.columns]
+    if pnl_cols:
+        merged["pnl_combined"] = merged[pnl_cols].mean(axis=1)
+        _pnl = merged[pnl_cols]
+        _has_all = _pnl.notna().all(axis=1)
+        merged["all_lose"] = _has_all & (_pnl < 0).all(axis=1)
+        merged["all_win"] = _has_all & (_pnl > 0).all(axis=1)
+
+    merged = merged.merge(DTE_DATA, left_on="date", right_on="t_date", how="left")
+    merged.drop(columns=["t_date"], inplace=True, errors="ignore")
+    if dte is not None and "DTE" in merged.columns:
+        merged = merged[merged["DTE"] == dte]
+
+    # Training/Val/OOS periods
+    from datetime import date as _dt_date
+    TRAIN = (_dt_date(2023, 2, 1), _dt_date(2025, 6, 30))
+    VAL = (_dt_date(2025, 7, 1), _dt_date(2026, 1, 30))
+    OOS1 = (_dt_date(2021, 1, 1), _dt_date(2023, 1, 31))
+    OOS2 = (_dt_date(2026, 2, 1), _dt_date(2026, 3, 23))
+
+    clean = merged.dropna(subset=["regime_state", "pnl_combined"])
+    train = clean[(clean["date"] >= TRAIN[0]) & (clean["date"] <= TRAIN[1])]
+    val = clean[(clean["date"] >= VAL[0]) & (clean["date"] <= VAL[1])]
+    oos1 = clean[(clean["date"] >= OOS1[0]) & (clean["date"] <= OOS1[1])]
+    oos2 = clean[(clean["date"] >= OOS2[0]) & (clean["date"] <= OOS2[1])]
+
+    # ── 1. Baseline Composite Score Breakdown ──
+    val_pnl = val["pnl_combined"].dropna()
+    val_sharpe = 0
+    if len(val_pnl) > 10:
+        m, s = float(val_pnl.mean()), float(val_pnl.std())
+        if s > 0:
+            val_sharpe = round((m * 252 - 5.5) / (s * (252 ** 0.5)), 4)
+
+    # Safe separation
+    def _al_pct(sub):
+        if "all_lose" not in sub.columns or len(sub) == 0:
+            return None
+        return round(float(sub["all_lose"].sum() / len(sub) * 100), 2)
+
+    def _level_gap(subset, prefix, exp_name=None):
+        safe = subset[subset["regime_state"] == f"{prefix} Safe"]
+        exposed = subset[subset["regime_state"] == (exp_name or f"{prefix} Exposed")]
+        s_al, e_al = _al_pct(safe), _al_pct(exposed)
+        if s_al is not None and e_al is not None:
+            return e_al - s_al
+        return 0
+
+    gaps = [_level_gap(val, "L1"), _level_gap(val, "L3"), _level_gap(val, "L2", "L2 Risky")]
+    safe_sep = round(float(np.mean(gaps)), 2) if gaps else 0
+
+    # Rank stability
+    train_means, val_means = [], []
+    for s in REGIME_STATES:
+        t_pnl = train[train["regime_state"] == s]["pnl_combined"]
+        v_pnl = val[val["regime_state"] == s]["pnl_combined"]
+        train_means.append(float(t_pnl.mean()) if len(t_pnl) > 0 else 0)
+        val_means.append(float(v_pnl.mean()) if len(v_pnl) > 0 else 0)
+    try:
+        rank_corr = round(float(_spearmanr(train_means, val_means).correlation), 4)
+        if np.isnan(rank_corr):
+            rank_corr = 0
+    except Exception:
+        rank_corr = 0
+
+    # Coverage
+    val_counts = val["regime_state"].value_counts()
+    n_states_used = len(val_counts)
+    min_state_days = int(val_counts.min()) if len(val_counts) > 0 else 0
+    coverage = round(min(1.0, min_state_days / 5.0) * min(1.0, n_states_used / 6.0), 4)
+
+    # ── Sharpe Monotonicity: Safe MUST beat Risky/Exposed within each level ──
+    EXPECTED_PAIRS = [
+        ("L1 Safe", "L1 Exposed"),
+        ("L2 Safe", "L2 Caution-A"),
+        ("L2 Safe", "L2 Caution-B"),
+        ("L2 Safe", "L2 Risky"),
+        ("L2 Caution-A", "L2 Risky"),
+        ("L2 Caution-B", "L2 Risky"),
+        ("L3 Safe", "L3 Exposed"),
+    ]
+
+    def _state_sharpe_val(state_name):
+        sub = val[val["regime_state"] == state_name]["pnl_combined"].dropna()
+        if len(sub) < 3:
+            return None
+        m_, s_ = float(sub.mean()), float(sub.std())
+        if s_ == 0:
+            return None
+        return (m_ * 252 - 5.5) / (s_ * (252 ** 0.5))
+
+    mono_violations = 0
+    mono_checked = 0
+    mono_details = []
+    for better, worse in EXPECTED_PAIRS:
+        sh_b = _state_sharpe_val(better)
+        sh_w = _state_sharpe_val(worse)
+        if sh_b is not None and sh_w is not None:
+            mono_checked += 1
+            violated = sh_w > sh_b
+            if violated:
+                mono_violations += 1
+            mono_details.append({
+                "better": better, "worse": worse,
+                "better_sharpe": round(sh_b, 2), "worse_sharpe": round(sh_w, 2),
+                "violated": violated,
+            })
+
+    mono_score = (1.0 - (mono_violations / mono_checked)) if mono_checked > 0 else 0.5
+
+    composite = round(
+        0.30 * min(val_sharpe / 5.0, 1.5) +
+        0.20 * min(safe_sep / 10.0, 1.0) +
+        0.15 * max(rank_corr, 0) +
+        0.10 * coverage +
+        0.25 * mono_score, 6
+    )
+
+    baseline = {
+        "composite_score": composite,
+        "val_sharpe": val_sharpe,
+        "safe_separation": safe_sep,
+        "rank_stability": rank_corr,
+        "state_coverage": coverage,
+        "monotonicity": round(mono_score, 4),
+        "monotonicity_violations": mono_violations,
+        "monotonicity_checked": mono_checked,
+        "monotonicity_details": mono_details,
+        "val_days": len(val),
+        "train_days": len(train),
+        "n_states_used": n_states_used,
+        "score_breakdown": {
+            "sharpe_term": round(0.30 * min(val_sharpe / 5.0, 1.5), 4),
+            "safe_sep_term": round(0.20 * min(safe_sep / 10.0, 1.0), 4),
+            "rank_term": round(0.15 * max(rank_corr, 0), 4),
+            "coverage_term": round(0.10 * coverage, 4),
+            "monotonicity_term": round(0.25 * mono_score, 4),
+        }
+    }
+
+    # ── 2. Per-State Alpha Profile ──
+    pnl_strat_cols = [c for c in ["pnl_dm", "pnl_wc", "pnl_orion"] if c in clean.columns]
+    state_alpha = []
+    for state in REGIME_STATES:
+        for period_name, period_df in [("train", train), ("val", val), ("oos1", oos1), ("oos2", oos2)]:
+            sub = period_df[period_df["regime_state"] == state]
+            pnl = sub["pnl_combined"].dropna()
+            n = len(sub)
+            al = _al_pct(sub)
+            aw = round(float(sub["all_win"].sum() / n * 100), 2) if "all_win" in sub.columns and n > 0 else None
+            port_avg = round(float(pnl.mean()), 4) if len(pnl) > 0 else None
+            port_std = round(float(pnl.std()), 4) if len(pnl) > 1 else None
+            sh = None
+            if len(pnl) > 10:
+                m_, s_ = float(pnl.mean()), float(pnl.std())
+                if s_ > 0:
+                    sh = round((m_ * 252 - 5.5) / (s_ * (252 ** 0.5)), 2)
+            wr = round(float((pnl > 0).sum() / len(pnl) * 100), 1) if len(pnl) > 0 else None
+
+            strat_perf = {}
+            for col in pnl_strat_cols:
+                s_pnl = sub[col].dropna()
+                skey = col.replace("pnl_", "")
+                s_sh = None
+                if len(s_pnl) > 10:
+                    sm, ss = float(s_pnl.mean()), float(s_pnl.std())
+                    if ss > 0:
+                        s_sh = round((sm * 252 - 5.5) / (ss * (252 ** 0.5)), 2)
+                strat_perf[skey] = {
+                    "avg": round(float(s_pnl.mean()), 4) if len(s_pnl) > 0 else None,
+                    "sharpe": _clean(s_sh),
+                    "win_rate": round(float((s_pnl > 0).sum() / len(s_pnl) * 100), 1) if len(s_pnl) > 0 else None,
+                }
+
+            state_alpha.append({
+                "state": state,
+                "color": REGIME_COLORS.get(state, "#888"),
+                "period": period_name,
+                "days": n,
+                "al_pct": _clean(al),
+                "aw_pct": _clean(aw),
+                "port_avg": _clean(port_avg),
+                "port_std": _clean(port_std),
+                "sharpe": _clean(sh),
+                "win_rate": _clean(wr),
+                "strategies": strat_perf,
+            })
+
+    # ── 3. Feature Importance (IC Ranking) ──
+    feature_cols = [
+        "iv_lag", "PK_IV_ratio", "IV_chg_5d", "IV_5d", "PK_5d",
+        "IV_10d", "PK_10d", "IV_chg_1d", "IV_percentile_60d",
+    ]
+    # Add computed features if present
+    for f in ["PK_IV_zscore_30d", "RV_today", "VRP_today"]:
+        if f in train.columns:
+            feature_cols.append(f)
+
+    feature_ics = []
+    for feat in feature_cols:
+        if feat not in train.columns:
+            continue
+        vals = train[[feat, "pnl_combined"]].dropna()
+        if len(vals) > 20:
+            ic = float(_spearmanr(vals[feat], vals["pnl_combined"]).correlation)
+            # Also compute val IC
+            vals_v = val[[feat, "pnl_combined"]].dropna() if feat in val.columns else pd.DataFrame()
+            ic_val = None
+            if len(vals_v) > 20:
+                ic_val = round(float(_spearmanr(vals_v[feat], vals_v["pnl_combined"]).correlation), 4)
+
+            feature_ics.append({
+                "feature": feat,
+                "train_ic": round(ic, 4),
+                "val_ic": _clean(ic_val),
+                "abs_ic": round(abs(ic), 4),
+                "direction": "negative" if ic < 0 else "positive",
+                "signal": "Strong" if abs(ic) > 0.04 else ("Moderate" if abs(ic) > 0.02 else "Weak"),
+            })
+
+    feature_ics.sort(key=lambda x: -x["abs_ic"])
+
+    # ── 4. Strategy Weights & Allocation Signals ──
+    # Current weights from autoresearch
+    strategy_weights = {
+        "L1 Safe": {"dm": 0, "wc": 1, "orion": 0, "signal": "WC only — low IV cream"},
+        "L1 Exposed": {"dm": 0, "wc": 1, "orion": 0.2, "signal": "WC dominant, light Orion"},
+        "L2 Safe": {"dm": 1, "wc": 1, "orion": 1, "signal": "All strategies active — sweet spot"},
+        "L2 Caution-A": {"dm": 0.2, "wc": 0.4, "orion": 0.8, "signal": "Orion heavy, reduce DM/WC"},
+        "L2 Caution-B": {"dm": 1, "wc": 1, "orion": 1, "signal": "Equal — IV rising but cushioned"},
+        "L2 Risky": {"dm": 1, "wc": 1, "orion": 1, "signal": "Full exposure, high conviction"},
+        "L3 Safe": {"dm": 1, "wc": 1, "orion": 1, "signal": "DM standout in high IV"},
+        "L3 Exposed": {"dm": 0.3, "wc": 0.3, "orion": 1, "signal": "Orion only — danger zone"},
+    }
+
+    # ── 5. Boundary Sensitivity (from diagnostics) ──
+    boundary_grid = []
+    if "boundary_sensitivity" in diag:
+        bs = diag["boundary_sensitivity"]
+        for key, score in bs.get("grid", {}).items():
+            parts = key.split("_")
+            if len(parts) == 2:
+                boundary_grid.append({
+                    "l1": float(parts[0]),
+                    "l2": float(parts[1]),
+                    "score": round(score, 4),
+                })
+        best_boundary = {
+            "best_l1": bs.get("best_l1"),
+            "best_l2": bs.get("best_l2"),
+            "best_score": bs.get("best_score"),
+            "current_l1": 8.5,
+            "current_l2": 11.0,
+        }
+    else:
+        best_boundary = {"best_l1": 9.0, "best_l2": 11.0, "best_score": 0.907, "current_l1": 8.5, "current_l2": 11.0}
+
+    # ── 6. Regime Distribution Warnings ──
+    distribution_warnings = []
+    for state in REGIME_STATES:
+        for pname, pdf in [("val", val), ("oos2", oos2)]:
+            n = len(pdf[pdf["regime_state"] == state])
+            if n < 5:
+                distribution_warnings.append({
+                    "state": state,
+                    "period": pname,
+                    "days": n,
+                    "severity": "critical" if n == 0 else "warning",
+                    "message": f"{state}: only {n}d in {pname}" + (" — unreliable" if n < 3 else ""),
+                })
+
+    # ── 7. OOS Performance Summary ──
+    def _period_sharpe(period_df):
+        pnl = period_df["pnl_combined"].dropna()
+        if len(pnl) < 10:
+            return None
+        m, s = float(pnl.mean()), float(pnl.std())
+        if s == 0:
+            return None
+        return round((m * 252 - 5.5) / (s * (252 ** 0.5)), 2)
+
+    oos_summary = {
+        "train": {"days": len(train), "sharpe": _clean(_period_sharpe(train)), "al_pct": _clean(_al_pct(train))},
+        "val": {"days": len(val), "sharpe": _clean(_period_sharpe(val)), "al_pct": _clean(_al_pct(val))},
+        "oos1": {"days": len(oos1), "sharpe": _clean(_period_sharpe(oos1)), "al_pct": _clean(_al_pct(oos1))},
+        "oos2": {"days": len(oos2), "sharpe": _clean(_period_sharpe(oos2)), "al_pct": _clean(_al_pct(oos2))},
+    }
+
+    # ── 8. Rolling Sharpe Timeseries ──
+    pnl_series = clean.set_index("date")["pnl_combined"].sort_index()
+    roll_mean = pnl_series.rolling(60, min_periods=30).mean()
+    roll_std = pnl_series.rolling(60, min_periods=30).std()
+    roll_sharpe = (roll_mean * 252 - 5.5) / (roll_std * (252 ** 0.5))
+
+    rolling_sharpe_ts = []
+    for dt, sh in roll_sharpe.dropna().items():
+        if not (math.isnan(sh) or math.isinf(sh)):
+            rolling_sharpe_ts.append({"date": str(dt), "sharpe": round(float(sh), 2)})
+
+    # ── 9. Rank Stability Detail ──
+    rank_detail = []
+    for i, state in enumerate(REGIME_STATES):
+        rank_detail.append({
+            "state": state,
+            "color": REGIME_COLORS.get(state, "#888"),
+            "train_mean": round(train_means[i], 4),
+            "val_mean": round(val_means[i], 4),
+        })
+
+    # ── 10. High Correlation Feature Pairs ──
+    high_corr_pairs = []
+    if "feature_correlations" in diag:
+        for pair in diag["feature_correlations"].get("high_corr_pairs", []):
+            if len(pair) >= 3:
+                high_corr_pairs.append({
+                    "feature_1": pair[0],
+                    "feature_2": pair[1],
+                    "rho": round(float(pair[2]), 3),
+                    "redundant": abs(float(pair[2])) > 0.75,
+                })
+
+    # ── 11. Strategy Correlation by State ──
+    strat_corrs = []
+    if "strategy_correlations" in diag:
+        sc = diag["strategy_correlations"]
+        for state_key, corr_dict in sc.items():
+            if state_key == "overall":
+                dm_wc = corr_dict.get("pnl_dm", {}).get("pnl_wc")
+                dm_or = corr_dict.get("pnl_dm", {}).get("pnl_orion")
+                wc_or = corr_dict.get("pnl_wc", {}).get("pnl_orion")
+                strat_corrs.append({
+                    "state": "Overall",
+                    "dm_wc": round(dm_wc, 3) if dm_wc else None,
+                    "dm_orion": round(dm_or, 3) if dm_or else None,
+                    "wc_orion": round(wc_or, 3) if wc_or else None,
+                })
+            elif state_key in REGIME_STATES:
+                dm_wc = corr_dict.get("pnl_dm", {}).get("pnl_wc")
+                dm_or = corr_dict.get("pnl_dm", {}).get("pnl_orion")
+                wc_or = corr_dict.get("pnl_wc", {}).get("pnl_orion")
+                strat_corrs.append({
+                    "state": state_key,
+                    "dm_wc": round(dm_wc, 3) if dm_wc else None,
+                    "dm_orion": round(dm_or, 3) if dm_or else None,
+                    "wc_orion": round(wc_or, 3) if wc_or else None,
+                })
+
+    return {
+        "baseline": baseline,
+        "state_alpha": state_alpha,
+        "feature_importance": feature_ics,
+        "strategy_weights": strategy_weights,
+        "boundary_grid": boundary_grid,
+        "best_boundary": best_boundary,
+        "distribution_warnings": distribution_warnings,
+        "oos_summary": oos_summary,
+        "rolling_sharpe": rolling_sharpe_ts,
+        "rank_detail": rank_detail,
+        "high_corr_pairs": high_corr_pairs,
+        "strategy_correlations": strat_corrs,
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5501)

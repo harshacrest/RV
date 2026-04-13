@@ -845,3 +845,134 @@ export interface SnapshotComparisonData {
   snapshots: Record<string, SnapshotResult>
   agreement: SnapshotAgreement
 }
+
+// ── Alpha Insights Types ──
+
+export interface MonotonicityDetail {
+  better: string
+  worse: string
+  better_sharpe: number
+  worse_sharpe: number
+  violated: boolean
+}
+
+export interface AlphaBaseline {
+  composite_score: number
+  val_sharpe: number
+  safe_separation: number
+  rank_stability: number
+  state_coverage: number
+  monotonicity: number
+  monotonicity_violations: number
+  monotonicity_checked: number
+  monotonicity_details: MonotonicityDetail[]
+  val_days: number
+  train_days: number
+  n_states_used: number
+  score_breakdown: {
+    sharpe_term: number
+    safe_sep_term: number
+    rank_term: number
+    coverage_term: number
+    monotonicity_term: number
+  }
+}
+
+export interface AlphaStateEntry {
+  state: string
+  color: string
+  period: string
+  days: number
+  al_pct: number | null
+  aw_pct: number | null
+  port_avg: number | null
+  port_std: number | null
+  sharpe: number | null
+  win_rate: number | null
+  strategies: Record<string, { avg: number | null; sharpe: number | null; win_rate: number | null }>
+}
+
+export interface AlphaFeatureIC {
+  feature: string
+  train_ic: number
+  val_ic: number | null
+  abs_ic: number
+  direction: string
+  signal: string
+}
+
+export interface AlphaStrategyWeight {
+  dm: number
+  wc: number
+  orion: number
+  signal: string
+}
+
+export interface AlphaBoundaryPoint {
+  l1: number
+  l2: number
+  score: number
+}
+
+export interface AlphaBestBoundary {
+  best_l1: number | null
+  best_l2: number | null
+  best_score: number | null
+  current_l1: number
+  current_l2: number
+}
+
+export interface AlphaDistributionWarning {
+  state: string
+  period: string
+  days: number
+  severity: string
+  message: string
+}
+
+export interface AlphaOOSSummary {
+  days: number
+  sharpe: number | null
+  al_pct: number | null
+}
+
+export interface AlphaRollingSharpePt {
+  date: string
+  sharpe: number
+}
+
+export interface AlphaRankDetail {
+  state: string
+  color: string
+  train_mean: number
+  val_mean: number
+}
+
+export interface AlphaHighCorrPair {
+  feature_1: string
+  feature_2: string
+  rho: number
+  redundant: boolean
+}
+
+export interface AlphaStrategyCorr {
+  state: string
+  dm_wc: number | null
+  dm_orion: number | null
+  wc_orion: number | null
+}
+
+export interface AlphaInsightsData {
+  baseline: AlphaBaseline
+  state_alpha: AlphaStateEntry[]
+  feature_importance: AlphaFeatureIC[]
+  strategy_weights: Record<string, AlphaStrategyWeight>
+  boundary_grid: AlphaBoundaryPoint[]
+  best_boundary: AlphaBestBoundary
+  distribution_warnings: AlphaDistributionWarning[]
+  oos_summary: Record<string, AlphaOOSSummary>
+  rolling_sharpe: AlphaRollingSharpePt[]
+  rank_detail: AlphaRankDetail[]
+  high_corr_pairs: AlphaHighCorrPair[]
+  strategy_correlations: AlphaStrategyCorr[]
+}

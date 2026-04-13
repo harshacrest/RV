@@ -14,6 +14,19 @@
       "port": 5500,
       "cwd": "rv-dashboard",
       "autoPort": true
+    },
+    {
+      "name": "autoresearch-api",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["autoresearch_regime/api_autoresearch.py"],
+      "port": 5502
+    },
+    {
+      "name": "autoresearch-dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5503,
+      "cwd": "autoresearch_regime/dashboard"
     }
   ]
 }

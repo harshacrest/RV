@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+:root {
+  --bg-void: #060609;
+  --bg-primary: #0a0a10;
+  --bg-card: #0e0e16;
+  --bg-elevated: #12121c;
+  --bg-hover: #16161f;
+  --bg-active: #1a1a25;
+
+  --text-primary: #e8e8ef;
+  --text-secondary: #9898ab;
+  --text-muted: #8a8aa0;
+  --text-dim: #6a6a82;
+
+  --border: #1a1a26;
+  --border-subtle: #141420;
+  --border-active: #28283a;
+  --grid: #121218;
+
+  --signal-positive: #00e676;
+  --signal-negative: #ff5252;
+  --signal-warning: #ffab40;
+  --signal-info: #448aff;
+
+  --accent-primary: #c084fc;
+  --accent-secondary: #64ffda;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body {
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(192, 132, 252, 0.2);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 200ms var(--ease-out-expo);
+}
+.stat-card:hover {
+  border-color: var(--border-active);
+  transform: translateY(-1px);
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line { stroke: var(--grid) !important; }
+.recharts-text { fill: var(--text-secondary) !important; }
+.recharts-tooltip-wrapper { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5)); }
+.recharts-default-tooltip {
+  color: var(--text-primary) !important;
+  background-color: var(--bg-elevated) !important;
+}
+.recharts-tooltip-label { color: #ffffff !important; }
+.recharts-tooltip-item { color: #ffffff !important; }
+.recharts-tooltip-item-name,
+.recharts-tooltip-item-value,
+.recharts-tooltip-item-separator { color: #ffffff !important; }

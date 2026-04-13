@@ -5,7 +5,7 @@ import type {
   RegimeTransitionsData, RegimeFeatureInput, AllLoseData,
   ExplorationFeatureMeta, DataExplorationResult,
   FeatureRankingData, FeatureSelectionData, RegimeConstructionData,
-  SnapshotComparisonData, AdaptiveOOSData,
+  SnapshotComparisonData, AdaptiveOOSData, AlphaInsightsData,
 } from './types'
 
 function buildParams(opts: Record<string, string | undefined>): string {
@@ -104,4 +104,10 @@ export function fetchSnapshotComparison(startDate?: string, endDate?: string, dt
 
 export function fetchAdaptiveOOS(testPeriod: string, snapshot?: string, dte?: number | null) {
   return fetchJSON<AdaptiveOOSData>(`/api/regime/adaptive-oos${buildParams({ test_period: testPeriod, snapshot, dte: dteStr(dte) })}`)
+}
+
+// ── Alpha Insights ──
+
+export function fetchAlphaInsights(snapshot?: string, dte?: number | null) {
+  return fetchJSON<AlphaInsightsData>(`/api/alpha-insights${buildParams({ snapshot, dte: dteStr(dte) })}`)
 }

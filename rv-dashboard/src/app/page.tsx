@@ -9,10 +9,12 @@ import { RegimeConstruction } from '@/components/regime/RegimeConstruction'
 import { SnapshotComparison } from '@/components/regime/SnapshotComparison'
 import { AdaptiveOOS } from '@/components/regime/AdaptiveOOS'
 import { Framework } from '@/components/regime/Framework'
+import { AlphaInsights } from '@/components/regime/AlphaInsights'
 
-type RegimeTab = 'data-exploration' | 'framework' | 'feature-ranking' | 'feature-selection' | 'regime-construction' | 'regime-overview' | 'snapshot-comparison' | 'test-data'
+type RegimeTab = 'alpha-insights' | 'data-exploration' | 'framework' | 'feature-ranking' | 'feature-selection' | 'regime-construction' | 'regime-overview' | 'snapshot-comparison' | 'test-data'
 
 const REGIME_TABS: { key: RegimeTab; label: string }[] = [
+  
   { key: 'framework', label: 'Framework' },
   { key: 'data-exploration', label: 'Data Exploration' },
   { key: 'feature-ranking', label: 'Feature Ranking' },
@@ -21,6 +23,7 @@ const REGIME_TABS: { key: RegimeTab; label: string }[] = [
   { key: 'regime-overview', label: 'Regime Overview' },
   { key: 'snapshot-comparison', label: 'Snapshot Comparison' },
   { key: 'test-data', label: 'Test Data' },
+  { key: 'alpha-insights', label: 'Alpha Insights' },
 ]
 
 const SNAPSHOT_OPTIONS = [
@@ -145,6 +148,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-[1400px] mx-auto px-6 py-6">
+        {regimeTab === 'alpha-insights' && <AlphaInsights snapshot={snapshot} dte={dte} />}
         {regimeTab === 'framework' && <Framework />}
         {regimeTab === 'data-exploration' && <DataExploration startDate={startDate} endDate={endDate} snapshot={snapshot} dte={dte} />}
         {regimeTab === 'feature-ranking' && <FeatureRanking startDate={startDate} endDate={endDate} snapshot={snapshot} dte={dte} />}
