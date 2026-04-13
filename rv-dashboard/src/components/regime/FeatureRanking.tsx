@@ -382,7 +382,14 @@ export function FeatureRanking({ startDate, endDate, snapshot, dte }: Props) {
                     <div className="text-[9px] font-mono text-[var(--text-dim)] uppercase tracking-wider mb-2">AL Spread by DTE (days to expiry)</div>
                     <div className="flex gap-2 flex-wrap">
                       {Object.entries(f.dte_al_spread)
-                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .sort(([a], [b]) => {
+                          const aNum = Number(a), bNum = Number(b)
+                          const aIsNum = !isNaN(aNum), bIsNum = !isNaN(bNum)
+                          if (aIsNum && bIsNum) return aNum - bNum
+                          if (aIsNum) return -1
+                          if (bIsNum) return 1
+                          return a.localeCompare(b)
+                        })
                         .map(([dte, spread]) => (
                           <div
                             key={dte}

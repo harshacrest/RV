@@ -263,7 +263,14 @@ export function DataExploration({ startDate, endDate, snapshot, dte }: Props) {
   // Available DTE values from the data
   const availableDteValues = useMemo(() => {
     if (!data?.dte_quintile_analysis) return []
-    return Object.keys(data.dte_quintile_analysis).sort((a, b) => Number(a) - Number(b))
+    return Object.keys(data.dte_quintile_analysis).sort((a, b) => {
+      const aNum = Number(a), bNum = Number(b)
+      const aIsNum = !isNaN(aNum), bIsNum = !isNaN(bNum)
+      if (aIsNum && bIsNum) return aNum - bNum
+      if (aIsNum) return -1  // individual DTEs first
+      if (bIsNum) return 1
+      return a.localeCompare(b)  // grouped buckets after
+    })
   }, [data])
 
   // Quintile cross-strategy table data (respects DTE filter)

@@ -686,7 +686,7 @@ export interface CompleteTableRow {
 }
 
 export interface DteBreakdownRow {
-  dte: number
+  dte: number | string
   days: number
   al_pct: number
   aw_pct: number

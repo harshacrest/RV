@@ -118,7 +118,7 @@ export function RegimeConstruction({ startDate, endDate, snapshot, dte }: Props)
   const [data, setData] = useState<RegimeConstructionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [stratMetric, setStratMetric] = useState<StratMetric>('avg')
-  const [dteView, setDteView] = useState<number | null>(null) // null = all DTEs
+  const [dteView, setDteView] = useState<string | null>(null) // null = all DTEs
 
   useEffect(() => {
     setLoading(true)
@@ -728,7 +728,7 @@ export function RegimeConstruction({ startDate, endDate, snapshot, dte }: Props)
                 <div className="flex items-center gap-1.5">
                   <span className="text-[9px] font-mono uppercase tracking-wider text-[var(--text-dim)]">DTE</span>
                   <div className="flex items-center rounded-md border border-[var(--border)] overflow-hidden">
-                    {([null, 4, 3, 2, 1, 0] as const).map(val => (
+                    {([null, '4', '3', '2', '1', '0', '0,2', '1,3,4'] as const).map(val => (
                       <button
                         key={val ?? 'all'}
                         onClick={() => setDteView(val)}
@@ -769,7 +769,7 @@ export function RegimeConstruction({ startDate, endDate, snapshot, dte }: Props)
                 {complete_table.map(regime => {
                   const allRows = dte_breakdown[regime.state] as DteBreakdownRow[] | undefined
                   if (!allRows || allRows.length === 0) return null
-                  const rows = dteView !== null ? allRows.filter(r => r.dte === dteView) : allRows
+                  const rows = dteView !== null ? allRows.filter(r => String(r.dte) === dteView) : allRows
                   if (rows.length === 0) return null
                   return rows.map((dr, idx) => {
                     const dm = stratVal(dr.dm_avg, dr.dm_sharpe, stratMetric)

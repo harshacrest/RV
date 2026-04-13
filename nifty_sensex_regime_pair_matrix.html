@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nifty–Sensex Regime Pair Matrix</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0b0d;--surface:#111318;--surface2:#181b22;
+  --border:#252a35;--border2:#2f3542;
+  --text:#e2e4e9;--text2:#9da3b0;--text3:#636b7a;
+  --green:#34d399;--green-dim:#1a3a2e;
+  --amber:#f59e0b;--amber-dim:#3a2e10;
+  --red:#ef4444;--red-dim:#3a1616;
+  --teal:#2dd4bf;--teal-dim:#153330;
+  --purple:#a78bfa;--purple-dim:#2a2040;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);padding:2rem 1.5rem;max-width:860px;margin:0 auto}
+h1{font-size:1.15rem;font-weight:600;letter-spacing:-0.02em;margin-bottom:0.2rem}
+.sub{color:var(--text3);font-size:0.78rem;margin-bottom:1.5rem}
+.wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:580px}
+th{font-size:0.68rem;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;color:var(--text3);padding:0.6rem 0.7rem;text-align:center;background:var(--surface2);border-bottom:1px solid var(--border2)}
+th:first-child{text-align:left;background:transparent;width:22%}
+td{padding:0.75rem;border-bottom:1px solid var(--border);text-align:center;vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{text-align:left;font-weight:500;font-size:0.82rem;color:var(--text);background:var(--surface2);white-space:nowrap}
+.tag{display:inline-block;font-size:0.65rem;font-weight:500;padding:2px 7px;border-radius:3px;letter-spacing:0.02em;margin-bottom:4px}
+.tag-green{background:var(--green-dim);color:var(--green)}
+.tag-amber{background:var(--amber-dim);color:var(--amber)}
+.tag-red{background:var(--red-dim);color:var(--red)}
+.tag-teal{background:var(--teal-dim);color:var(--teal)}
+.desc{font-size:0.73rem;color:var(--text3);line-height:1.45;margin-top:2px}
+.desc strong{color:var(--text2);font-weight:500}
+.cell-green{background:rgba(52,211,153,0.04)}
+.cell-amber{background:rgba(245,158,11,0.04)}
+.cell-red{background:rgba(239,68,68,0.04)}
+.cell-teal{background:rgba(45,212,191,0.05)}
+</style>
+</head>
+<body>
+
+<h1>Nifty–Sensex Regime Pair Matrix</h1>
+<p class="sub">Same 3-input classification on both indices · Divergence = index arb signal</p>
+
+<div class="wrap">
+<table>
+  <tr>
+    <th></th>
+    <th>Sensex safe</th>
+    <th>Sensex caution</th>
+    <th>Sensex risky / exposed</th>
+  </tr>
+  <tr>
+    <td>Nifty safe</td>
+    <td class="cell-green">
+      <span class="tag tag-green">NORMAL</span>
+      <div class="desc">Most common. Both cushioned. Trade Nifty (liquidity).</div>
+    </td>
+    <td class="cell-amber">
+      <span class="tag tag-amber">SENSEX STRESS</span>
+      <div class="desc">Rare. Composition-specific stress. Stay with Nifty.</div>
+    </td>
+    <td class="cell-red">
+      <span class="tag tag-red">VERY RARE</span>
+      <div class="desc">Sensex crisis, Nifty calm. Investigate cause.</div>
+    </td>
+  </tr>
+  <tr>
+    <td>Nifty caution</td>
+    <td class="cell-teal">
+      <span class="tag tag-teal">THE EDGE</span>
+      <div class="desc"><strong>Shift to Sensex.</strong> Non-Sensex names driving Nifty PK. Sensex cushion intact.</div>
+    </td>
+    <td class="cell-amber">
+      <span class="tag tag-amber">BOTH STRESSED</span>
+      <div class="desc">Correlated stress. Reduce both. No arb edge.</div>
+    </td>
+    <td class="cell-red">
+      <span class="tag tag-red">SENSEX LEADING</span>
+      <div class="desc">Sensex-specific stress. Stay with Nifty if trading.</div>
+    </td>
+  </tr>
+  <tr>
+    <td>Nifty risky / exposed</td>
+    <td class="cell-teal">
+      <span class="tag tag-teal">MAX DIVERGENCE</span>
+      <div class="desc"><strong>Strongest signal.</strong> Verify persistence — does Sensex catch up within hours?</div>
+    </td>
+    <td class="cell-amber">
+      <span class="tag tag-amber">PARTIAL DIVERGENCE</span>
+      <div class="desc">Nifty worse but Sensex not safe either. Small edge.</div>
+    </td>
+    <td class="cell-red">
+      <span class="tag tag-red">FULL CRISIS</span>
+      <div class="desc">Both danger zone. No arb. Reduce all gross.</div>
+    </td>
+  </tr>
+</table>
+</div>
+
+</body>
+</html>

@@ -540,7 +540,10 @@ def _compute_dte_cross(df: pd.DataFrame, feature: str) -> dict:
         return {"dte_labels": [], "feature_labels": [], "grid": []}
 
     dte_values = sorted(valid["DTE"].dropna().unique().astype(int).tolist())
-    dte_labels = [str(d) for d in dte_values]
+    # Add grouped DTE buckets alongside individual values
+    DTE_GROUPS = [("0,2", [0, 2]), ("1,3,4", [1, 3, 4])]
+    dte_entries = [(str(d), [d]) for d in dte_values] + [(label, vals_list) for label, vals_list in DTE_GROUPS]
+    dte_labels = [e[0] for e in dte_entries]
 
     edges = np.unique(np.quantile(valid[feature].values, [0, 1/3, 2/3, 1.0])).tolist()
 
@@ -559,10 +562,10 @@ def _compute_dte_cross(df: pd.DataFrame, feature: str) -> dict:
         feature_labels.append(label)
 
         row = []
-        for dte_val in dte_values:
-            dmask = valid["DTE"].values == dte_val
+        for dte_label_str, dte_vals_list in dte_entries:
+            dmask = valid["DTE"].isin(dte_vals_list).values
             sub = valid[fmask & dmask]
-            row.append(_bucket_metrics(sub, f"{label} DTE={dte_val}", [_clean(float(lo)), _clean(float(hi))], feature))
+            row.append(_bucket_metrics(sub, f"{label} DTE={dte_label_str}", [_clean(float(lo)), _clean(float(hi))], feature))
         grid.append(row)
 
     return {"dte_labels": dte_labels, "feature_labels": feature_labels, "grid": grid}
@@ -578,7 +581,9 @@ def _compute_composite_dte_cross(df: pd.DataFrame, row_feature: str, col_feature
     row_edges = np.unique(np.quantile(valid[row_feature].values, terciles))
     col_edges = np.unique(np.quantile(valid[col_feature].values, terciles))
     dte_values = sorted(valid["DTE"].dropna().unique().astype(int).tolist())
-    dte_labels = [str(d) for d in dte_values]
+    DTE_GROUPS = [("0,2", [0, 2]), ("1,3,4", [1, 3, 4])]
+    dte_entries = [(str(d), [d]) for d in dte_values] + [(label, vals_list) for label, vals_list in DTE_GROUPS]
+    dte_labels = [e[0] for e in dte_entries]
 
     combo_labels = []
     grid = []  # each row = one combo, each col = one DTE
@@ -604,10 +609,10 @@ def _compute_composite_dte_cross(df: pd.DataFrame, row_feature: str, col_feature
             combo_labels.append({"row_label": r_label, "col_label": c_label, "combo_label": combo_label})
 
             row = []
-            for dte_val in dte_values:
-                dmask = valid["DTE"].values == dte_val
+            for dte_label_str, dte_vals_list in dte_entries:
+                dmask = valid["DTE"].isin(dte_vals_list).values
                 sub = valid[combo_mask & dmask]
-                row.append(_bucket_metrics(sub, f"{combo_label} DTE={dte_val}", [float(rlo), float(rhi)]))
+                row.append(_bucket_metrics(sub, f"{combo_label} DTE={dte_label_str}", [float(rlo), float(rhi)]))
             grid.append(row)
 
     return {"combo_labels": combo_labels, "dte_labels": dte_labels, "grid": grid}
@@ -1480,9 +1485,10 @@ def get_data_exploration(
     dte_feature_vs_pnl = {}
     if "DTE" in valid.columns:
         dte_vals_corr = sorted(valid["DTE"].dropna().unique().astype(int).tolist())
-        for dte_val in dte_vals_corr:
-            dte_label = str(dte_val)
-            dte_sub = valid[valid["DTE"] == dte_val]
+        DTE_GROUPS = [("0,2", [0, 2]), ("1,3,4", [1, 3, 4])]
+        dte_corr_entries = [(str(d), [d]) for d in dte_vals_corr] + [(label, vals_list) for label, vals_list in DTE_GROUPS]
+        for dte_label, dte_vals_list in dte_corr_entries:
+            dte_sub = valid[valid["DTE"].isin(dte_vals_list)]
             if len(dte_sub) < 10:
                 continue
             dte_corr_dict = {}
@@ -1579,13 +1585,14 @@ def get_data_exploration(
         # Clean up temp column
         valid.drop(columns=["_quintile"], inplace=True, errors="ignore")
 
-    # ═══ DTE Quintile Analysis (each DTE value separately) ═══
+    # ═══ DTE Quintile Analysis (each DTE value separately + grouped buckets) ═══
     dte_quintile_analysis = {}
     if "DTE" in valid.columns:
         dte_values_available = sorted(valid["DTE"].dropna().unique().astype(int).tolist())
-        for dte_val in dte_values_available:
-            dte_label = str(dte_val)
-            dte_sub = valid[valid["DTE"] == dte_val]
+        DTE_GROUPS = [("0,2", [0, 2]), ("1,3,4", [1, 3, 4])]
+        dte_qa_entries = [(str(d), [d]) for d in dte_values_available] + [(label, vals_list) for label, vals_list in DTE_GROUPS]
+        for dte_label, dte_vals_list in dte_qa_entries:
+            dte_sub = valid[valid["DTE"].isin(dte_vals_list)]
             if len(dte_sub) < 20:
                 continue
             dte_feat_vals = dte_sub[feature].dropna()
@@ -1835,14 +1842,15 @@ def get_feature_ranking(
                 "aw_pct": round(aw_pct, 1),
             })
 
-        # ── DTE quintiles (each DTE value separately) ──
+        # ── DTE quintiles (each DTE value separately + grouped buckets) ──
         dte_quintiles = {}
         dte_al_spread = {}
         if "DTE" in sub.columns:
             dte_vals_available = sorted(sub["DTE"].dropna().unique().astype(int).tolist())
-            for dte_val in dte_vals_available:
-                dte_label = str(dte_val)
-                dte_sub = sub[sub["DTE"] == dte_val]
+            DTE_GROUPS = [("0,2", [0, 2]), ("1,3,4", [1, 3, 4])]
+            dte_fr_entries = [(str(d), [d]) for d in dte_vals_available] + [(label, vals_list) for label, vals_list in DTE_GROUPS]
+            for dte_label, dte_vals_list in dte_fr_entries:
+                dte_sub = sub[sub["DTE"].isin(dte_vals_list)]
                 if len(dte_sub) < 20:
                     continue
                 try:
@@ -2640,9 +2648,10 @@ def get_regime_construction(
                 continue
             state_dte_rows = []
             dte_vals_avail = sorted(state_sub["DTE"].dropna().unique().astype(int).tolist())
-            for dte_val in dte_vals_avail:
-                dte_label = str(dte_val)
-                dsub = state_sub[state_sub["DTE"] == dte_val]
+            DTE_GROUPS = [("0,2", [0, 2]), ("1,3,4", [1, 3, 4])]
+            dte_bd_entries = [(str(d), [d]) for d in dte_vals_avail] + [(label, vals_list) for label, vals_list in DTE_GROUPS]
+            for dte_label, dte_vals_list in dte_bd_entries:
+                dsub = state_sub[state_sub["DTE"].isin(dte_vals_list)]
                 dn = len(dsub)
                 if dn == 0:
                     continue
@@ -2651,7 +2660,7 @@ def get_regime_construction(
                 d_port_avg = float(dsub["pnl_combined"].mean()) if "pnl_combined" in dsub.columns else 0
                 d_sh = _sharpe(dsub["pnl_combined"]) if "pnl_combined" in dsub.columns else None
                 dte_row = {
-                    "dte": int(dte_val),
+                    "dte": dte_label,
                     "days": dn,
                     "al_pct": round(d_al_pct, 1),
                     "aw_pct": round(d_aw_pct, 1),
